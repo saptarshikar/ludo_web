@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ludo Online</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="app__header">
+      <h1>Ludo Online</h1>
+      <p class="tagline">Invite friends, roll the dice, race to the center.</p>
+    </header>
+    <main class="app__main">
+      <section id="join-section" class="panel">
+        <h2>Join or Create a Room</h2>
+        <div class="auth-panel">
+          <div class="auth-info">
+            <div id="google-signin"></div>
+            <div id="profile-summary" class="profile-summary hidden">
+              <img id="profile-avatar" class="profile-avatar hidden" alt="Profile avatar" />
+              <div class="profile-meta">
+                <span id="profile-name" class="profile-name">Not signed in</span>
+                <span id="profile-stats" class="profile-stats"></span>
+              </div>
+              <button type="button" id="signout-btn" class="control-btn tertiary signout-btn">Sign Out</button>
+            </div>
+          </div>
+          <p id="auth-message" class="form-help">Sign in with Google to continue.</p>
+        </div>
+        <form id="join-form" class="join-form">
+          <label class="form-field">
+            <span>Room ID</span>
+            <div class="room-input">
+              <input id="room-input" type="text" placeholder="e.g. lucky-ludo" maxlength="20" required />
+              <button type="button" id="random-room-btn" title="Generate a random code">Random</button>
+            </div>
+          </label>
+          <label class="form-field">
+            <span>Player Name</span>
+            <input id="name-input" type="text" placeholder="Your name" maxlength="24" />
+          </label>
+          <button type="submit" class="primary">Enter Room</button>
+          <p id="join-error" class="form-error" role="alert"></p>
+        </form>
+        <p class="hint">
+          Share the same room ID with 2-4 friends. The first player in the room controls when the match starts.
+        </p>
+      </section>
+
+      <section id="game-section" class="game hidden">
+        <aside class="sidebar">
+          <div class="room-meta">
+            <div class="room-code">
+              <span>Room:</span>
+              <strong id="room-code">—</strong>
+            </div>
+            <div class="player-identity">
+              <span>You are</span>
+              <span id="player-badge" class="badge">—</span>
+            </div>
+          </div>
+          <div class="controls">
+            <button id="start-btn" class="primary control-btn">Start Game</button>
+            <button id="roll-btn" class="control-btn secondary">Roll Dice</button>
+            <div id="ai-controls" class="ai-controls hidden">
+              <label class="form-field">
+                <span>AI Difficulty</span>
+                <select id="ai-difficulty">
+                  <option value="easy">Easy</option>
+                  <option value="medium">Medium</option>
+                  <option value="hard">Hard</option>
+                </select>
+              </label>
+              <button id="add-ai-btn" class="control-btn tertiary">Add AI Player</button>
+            </div>
+            <div class="dice-display" aria-live="polite">
+              <span>Dice:</span>
+              <strong id="dice-value">–</strong>
+            </div>
+            <p id="status-message" class="status-message"></p>
+          </div>
+          <div class="players-panel">
+            <h3>Players</h3>
+            <ul id="players-list"></ul>
+          </div>
+          <div class="history-panel">
+            <h3>Recent Activity</h3>
+            <ul id="history-log"></ul>
+          </div>
+        </aside>
+        <div class="board-wrapper">
+          <canvas id="board-canvas" width="660" height="660" aria-label="Ludo board"></canvas>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
