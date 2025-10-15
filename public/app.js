@@ -404,6 +404,7 @@ const state = {
     profile: null,
     sessionToken: null,
     ready: false,
+    mode: 'unknown', // 'unknown' | 'authenticated' | 'guest'
   },
   config: {
     googleClientId: null,
@@ -425,6 +426,7 @@ const profileName = document.getElementById('profile-name');
 const profileStats = document.getElementById('profile-stats');
 const profileAvatar = document.getElementById('profile-avatar');
 const signoutBtn = document.getElementById('signout-btn');
+const guestBtn = document.getElementById('guest-btn');
 const roomCode = document.getElementById('room-code');
 const playerBadge = document.getElementById('player-badge');
 const startBtn = document.getElementById('start-btn');
@@ -479,10 +481,28 @@ function updateProfileSummary(profile) {
   if (!profileSummary) {
     return;
   }
+  if (state.auth.mode === 'guest') {
+    profileSummary.classList.remove('hidden');
+    if (googleSignInContainer) {
+      googleSignInContainer.classList.remove('hidden');
+    }
+    if (signoutBtn) {
+      signoutBtn.classList.add('hidden');
+    }
+    profileAvatar.src = '';
+    profileAvatar.alt = '';
+    profileAvatar.classList.add('hidden');
+    profileName.textContent = 'Guest Player';
+    profileStats.textContent = 'Progress is not saved while playing as a guest.';
+    return;
+  }
   if (!profile || !state.auth.sessionToken) {
     profileSummary.classList.add('hidden');
     if (googleSignInContainer) {
       googleSignInContainer.classList.remove('hidden');
+    }
+    if (signoutBtn) {
+      signoutBtn.classList.add('hidden');
     }
     profileAvatar.src = '';
     profileAvatar.alt = '';
@@ -494,6 +514,9 @@ function updateProfileSummary(profile) {
   profileSummary.classList.remove('hidden');
   if (googleSignInContainer) {
     googleSignInContainer.classList.add('hidden');
+  }
+  if (signoutBtn) {
+    signoutBtn.classList.remove('hidden');
   }
   profileName.textContent = profile.name || profile.email || 'Player';
   profileStats.textContent = formatProfileStats(profile);
@@ -510,8 +533,17 @@ function updateProfileSummary(profile) {
 
 function updateAuthUI() {
   const loggedIn = Boolean(state.auth.sessionToken && state.auth.profile);
+  const guestMode = state.auth.mode === 'guest';
   if (joinSubmitBtn) {
-    joinSubmitBtn.disabled = !loggedIn;
+    joinSubmitBtn.disabled = !(loggedIn || guestMode);
+  }
+  if (guestBtn) {
+    guestBtn.disabled = guestMode;
+  }
+  if (guestMode) {
+    setAuthMessage('Playing as guest. Progress will not be saved.');
+    updateProfileSummary(null);
+    return;
   }
   if (loggedIn) {
     setAuthMessage('Signed in. Enter a room ID to play.');
@@ -527,7 +559,7 @@ function updateAuthUI() {
     setAuthMessage('Google sign-in is not configured for this server.');
   } else {
     updateProfileSummary(null);
-    setAuthMessage('Sign in with Google to continue.');
+    setAuthMessage('Sign in with Google or continue as guest.');
   }
 }
 
@@ -618,6 +650,7 @@ async function signInWithGoogleCredential(credential) {
     }
     state.auth.profile = data.profile || state.auth.profile || null;
     state.auth.sessionToken = data.sessionToken;
+    state.auth.mode = 'authenticated';
     localStorage.setItem(SESSION_STORAGE_KEY, data.sessionToken);
     updateAuthUI();
     setAuthMessage('Signed in. Enter a room ID to play.');
@@ -644,6 +677,7 @@ async function restoreSession() {
     const data = await fetchJSON(`/auth/session?token=${encodeURIComponent(savedToken)}`);
     state.auth.sessionToken = data.sessionToken;
     state.auth.profile = data.profile;
+    state.auth.mode = 'authenticated';
     localStorage.setItem(SESSION_STORAGE_KEY, data.sessionToken);
   } catch (error) {
     localStorage.removeItem(SESSION_STORAGE_KEY);
@@ -656,6 +690,7 @@ async function restoreSession() {
 function clearAuth() {
   state.auth.profile = null;
   state.auth.sessionToken = null;
+  state.auth.mode = 'unknown';
   localStorage.removeItem(SESSION_STORAGE_KEY);
   updateAuthUI();
   if (googleInitialized) {
@@ -753,6 +788,9 @@ function updatePlayers(players = [], currentPlayerId, winnerId) {
         ? `AI ${player.difficulty.charAt(0).toUpperCase()}${player.difficulty.slice(1)}`
         : 'AI';
       tags.push({ text: difficultyLabel, className: 'tag--ai' });
+    }
+    if (player.isGuest) {
+      tags.push({ text: 'Guest', className: 'tag--guest' });
     }
     if (!player.isAi && (typeof player.wins === 'number' || typeof player.games === 'number')) {
       const wins = typeof player.wins === 'number' ? player.wins : 0;
@@ -871,23 +909,17 @@ function renderGame() {
   roomCode.textContent = state.roomId || '—';
   if (state.player) {
     const base = `${state.player.name} (${state.player.label || state.player.id})`;
-    const wins =
-      typeof state.auth.profile?.wins === 'number'
-        ? state.auth.profile.wins
-        : typeof state.player.wins === 'number'
-        ? state.player.wins
-        : null;
-    const games =
-      typeof state.auth.profile?.games === 'number'
-        ? state.auth.profile.games
-        : typeof state.player.games === 'number'
-        ? state.player.games
-        : null;
+    const wins = typeof state.player.wins === 'number' ? state.player.wins : null;
+    const games = typeof state.player.games === 'number' ? state.player.games : null;
     let record = '';
-    if (typeof wins === 'number' && typeof games === 'number') {
-      record = ` • Record ${wins}/${games}`;
-    } else if (typeof wins === 'number') {
-      record = ` • Wins ${wins}`;
+    if (!state.player.isGuest) {
+      if (typeof wins === 'number' && typeof games === 'number') {
+        record = ` • Record ${wins}/${games}`;
+      } else if (typeof wins === 'number') {
+        record = ` • Wins ${wins}`;
+      }
+    } else {
+      record = ' • Guest mode';
     }
     playerBadge.textContent = `${base}${record}`;
   } else {
@@ -908,12 +940,19 @@ function renderGame() {
 
 function emitJoin(roomId, name) {
   if (!state.auth.sessionToken) {
-    setJoinError('Please sign in before joining a room.');
-    return;
+    if (state.auth.mode !== 'guest') {
+      setJoinError('Please sign in or continue as guest before joining a room.');
+      return;
+    }
   }
   socket.emit(
     'joinRoom',
-    { roomId, playerName: name, sessionToken: state.auth.sessionToken },
+    {
+      roomId,
+      playerName: name,
+      sessionToken: state.auth.sessionToken,
+      mode: state.auth.mode,
+    },
     (response) => {
       if (response?.error) {
         setJoinError(response.error);
@@ -922,11 +961,12 @@ function emitJoin(roomId, name) {
       state.player = response.player;
       state.roomId = response.room;
       if (response.profile) {
+        state.auth.mode = 'authenticated';
         state.auth.profile = { ...(state.auth.profile || {}), ...response.profile };
-        updateAuthUI();
       }
       setJoinError('');
       showGameUI();
+      updateAuthUI();
     },
   );
 }
@@ -946,8 +986,8 @@ joinForm.addEventListener('submit', (event) => {
     setJoinError('Room ID is required.');
     return;
   }
-  if (!state.auth.sessionToken) {
-    setJoinError('Please sign in before joining a room.');
+  if (!state.auth.sessionToken && state.auth.mode !== 'guest') {
+    setJoinError('Please sign in or continue as guest before joining.');
     return;
   }
   let name = nameInput.value.trim();
@@ -955,7 +995,7 @@ joinForm.addEventListener('submit', (event) => {
     name = state.auth.profile.name.trim();
     nameInput.value = name;
   }
-  if (!name) {
+  if (!name && state.auth.mode !== 'guest') {
     setJoinError('Please provide a display name.');
     return;
   }
@@ -999,6 +1039,17 @@ if (signoutBtn) {
     if (wasInGame) {
       window.location.reload();
     }
+  });
+}
+
+if (guestBtn) {
+  guestBtn.addEventListener('click', () => {
+    state.auth.mode = 'guest';
+    state.auth.profile = null;
+    state.auth.sessionToken = null;
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+    setJoinError('');
+    updateAuthUI();
   });
 }
 

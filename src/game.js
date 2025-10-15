@@ -48,7 +48,7 @@ class LudoGame {
     return PLAYER_CONFIGS.filter((config) => !taken.has(config.id));
   }
 
-  addPlayer({ socketId, name, profileId, avatar, wins, games } = {}) {
+  addPlayer({ socketId, name, profileId, avatar, wins, games, isGuest } = {}) {
     if (this.players.length >= MAX_PLAYERS) {
       throw new Error('Room is full');
     }
@@ -68,6 +68,7 @@ class LudoGame {
       avatar: avatar || null,
       wins: typeof wins === 'number' ? wins : null,
       games: typeof games === 'number' ? games : null,
+      isGuest: Boolean(isGuest),
     };
     this.players.push(player);
     this.playerTokens.set(player.id, this.createInitialTokens(player.id));
@@ -484,6 +485,7 @@ class LudoGame {
       avatar: player.avatar,
       wins: player.wins,
       games: player.games,
+      isGuest: player.isGuest,
     }));
     const tokens = {};
     for (const player of this.players) {

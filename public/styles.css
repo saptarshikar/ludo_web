@@ -116,6 +116,10 @@ body {
   margin-left: auto;
 }
 
+.guest-btn {
+  align-self: flex-start;
+}
+
 .form-field {
   display: flex;
   flex-direction: column;
@@ -422,6 +426,11 @@ body {
 .tag--record {
   background: rgba(37, 99, 235, 0.25);
   color: #bfdbfe;
+}
+
+.tag--guest {
+  background: rgba(148, 163, 184, 0.2);
+  color: #e2e8f0;
 }
 
 .history-panel li {

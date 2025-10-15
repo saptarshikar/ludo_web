@@ -1,123 +1,128 @@
-const fs = require('fs');
-const path = require('path');
 const { randomUUID } = require('crypto');
+const { pool, ensureConnected } = require('./db');
+
+function toProfile(row) {
+  if (!row) {
+    return null;
+  }
+  return {
+    id: row.id,
+    googleSub: row.google_sub,
+    email: row.email,
+    name: row.name,
+    avatar: row.avatar,
+    wins: Number(row.wins ?? 0),
+    games: Number(row.games ?? 0),
+    createdAt: row.created_at ? new Date(row.created_at).getTime() : null,
+    updatedAt: row.updated_at ? new Date(row.updated_at).getTime() : null,
+  };
+}
 
 class ProfileStore {
-  constructor(filePath) {
-    this.filePath = filePath;
-    this.loaded = false;
-    this.profiles = new Map(); // id -> profile
-    this.bySub = new Map(); // google sub -> id
+  constructor() {
+    this.ready = false;
   }
 
-  ensureLoaded() {
-    if (this.loaded) {
+  async init() {
+    if (this.ready) {
       return;
     }
-    this.loadFromDisk();
+    await ensureConnected();
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS profiles (
+        id CHAR(36) NOT NULL PRIMARY KEY,
+        google_sub VARCHAR(255) NOT NULL UNIQUE,
+        email VARCHAR(255),
+        name VARCHAR(255) NOT NULL,
+        avatar TEXT,
+        wins INT UNSIGNED NOT NULL DEFAULT 0,
+        games INT UNSIGNED NOT NULL DEFAULT 0,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB
+      DEFAULT CHARSET = utf8mb4
+      COLLATE = utf8mb4_unicode_ci;
+    `);
+    this.ready = true;
   }
 
-  loadFromDisk() {
-    try {
-      const absolute = path.resolve(this.filePath);
-      if (!fs.existsSync(absolute)) {
-        fs.mkdirSync(path.dirname(absolute), { recursive: true });
-        fs.writeFileSync(absolute, '{}', 'utf8');
-      }
-      const raw = fs.readFileSync(absolute, 'utf8');
-      const parsed = raw ? JSON.parse(raw) : {};
-      Object.entries(parsed).forEach(([id, profile]) => {
-        this.profiles.set(id, profile);
-        if (profile.googleSub) {
-          this.bySub.set(profile.googleSub, id);
-        }
-      });
-      this.loaded = true;
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('Failed to load profile store, continuing with empty state.', error);
-      this.profiles = new Map();
-      this.bySub = new Map();
-      this.loaded = true;
-    }
-  }
-
-  persist() {
-    const absolute = path.resolve(this.filePath);
-    const data = Object.fromEntries(
-      Array.from(this.profiles.entries()).map(([id, profile]) => [id, profile]),
+  async getById(id) {
+    await this.init();
+    const [rows] = await pool.query(
+      'SELECT * FROM profiles WHERE id = ? LIMIT 1',
+      [id],
     );
-    fs.writeFileSync(absolute, JSON.stringify(data, null, 2), 'utf8');
+    return toProfile(rows[0]);
   }
 
-  getById(profileId) {
-    this.ensureLoaded();
-    return this.profiles.get(profileId) || null;
+  async getByGoogleSub(googleSub) {
+    await this.init();
+    const [rows] = await pool.query(
+      'SELECT * FROM profiles WHERE google_sub = ? LIMIT 1',
+      [googleSub],
+    );
+    return toProfile(rows[0]);
   }
 
-  getByGoogleSub(googleSub) {
-    this.ensureLoaded();
-    const id = this.bySub.get(googleSub);
-    if (!id) {
-      return null;
-    }
-    return this.getById(id);
-  }
-
-  ensureProfile({ googleSub, email, name, picture }) {
-    this.ensureLoaded();
-    let profile = this.getByGoogleSub(googleSub);
-    const now = Date.now();
-    if (!profile) {
+  async ensureProfile({ googleSub, email, name, picture }) {
+    await this.init();
+    const existing = await this.getByGoogleSub(googleSub);
+    const now = new Date();
+    if (!existing) {
       const id = randomUUID();
-      profile = {
-        id,
-        googleSub,
-        email: email || null,
-        name: name || 'Player',
-        avatar: picture || null,
-        wins: 0,
-        games: 0,
-        createdAt: now,
-        updatedAt: now,
-      };
-      this.profiles.set(id, profile);
-      this.bySub.set(googleSub, id);
-    } else {
-      profile = {
-        ...profile,
-        email: email || profile.email,
-        name: name || profile.name,
-        avatar: picture || profile.avatar,
-        updatedAt: now,
-      };
-      this.profiles.set(profile.id, profile);
+      await pool.query(
+        `
+          INSERT INTO profiles (id, google_sub, email, name, avatar, wins, games, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?)
+        `,
+        [
+          id,
+          googleSub,
+          email || null,
+          name || 'Player',
+          picture || null,
+          now,
+          now,
+        ],
+      );
+      return this.getById(id);
     }
-    this.persist();
-    return profile;
+    await pool.query(
+      `
+        UPDATE profiles
+        SET email = ?, name = ?, avatar = ?, updated_at = ?
+        WHERE id = ?
+      `,
+      [
+        email || existing.email || null,
+        name || existing.name || 'Player',
+        picture || existing.avatar || null,
+        now,
+        existing.id,
+      ],
+    );
+    return this.getById(existing.id);
   }
 
-  recordGameResult(profileId, { won }) {
-    this.ensureLoaded();
-    const profile = this.getById(profileId);
-    if (!profile) {
-      return null;
-    }
-    profile.games += 1;
-    if (won) {
-      profile.wins += 1;
-    }
-    profile.updatedAt = Date.now();
-    this.profiles.set(profileId, profile);
-    this.persist();
-    return profile;
+  async recordGameResult(profileId, { won }) {
+    await this.init();
+    const winsIncrement = won ? 1 : 0;
+    await pool.query(
+      `
+        UPDATE profiles
+        SET wins = wins + ?, games = games + 1, updated_at = ?
+        WHERE id = ?
+      `,
+      [winsIncrement, new Date(), profileId],
+    );
+    return this.getById(profileId);
   }
 }
 
-const defaultStore = new ProfileStore(path.join(__dirname, '..', 'data', 'profiles.json'));
+const profileStore = new ProfileStore();
 
 module.exports = {
   ProfileStore,
-  profileStore: defaultStore,
+  profileStore,
 };
 

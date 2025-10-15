@@ -17,6 +17,12 @@ const io = new Server(server);
 
 const roomManager = new RoomManager();
 
+profileStore.init().catch((error) => {
+  // eslint-disable-next-line no-console
+  console.error('Failed to initialise profile store', error);
+  process.exit(1);
+});
+
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
@@ -47,7 +53,7 @@ function getProfileSummary(profile) {
   };
 }
 
-function processResults(room) {
+async function processResults(room) {
   if (!room || typeof room.game.consumeResults !== 'function') {
     return;
   }
@@ -56,28 +62,38 @@ function processResults(room) {
     return;
   }
   const { winnerId } = results;
-  results.participants.forEach(({ playerId, profileId }) => {
+  // Process sequentially to avoid overwhelming the database.
+  // eslint-disable-next-line no-restricted-syntax
+  for (const { playerId, profileId } of results.participants) {
     if (!profileId) {
-      return;
+      // eslint-disable-next-line no-continue
+      continue;
     }
-    const updated = profileStore.recordGameResult(profileId, { won: winnerId === playerId });
-    if (!updated) {
-      return;
-    }
-    const player = room.game.players.find((entry) => entry.profileId === profileId);
-    if (player) {
-      player.wins = updated.wins;
-      player.games = updated.games;
-      player.avatar = updated.avatar;
-      if (!player.name || player.name.trim().length === 0) {
-        player.name = updated.name;
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const updated = await profileStore.recordGameResult(profileId, { won: winnerId === playerId });
+      if (!updated) {
+        // eslint-disable-next-line no-continue
+        continue;
       }
+      const player = room.game.players.find((entry) => entry.profileId === profileId);
+      if (player) {
+        player.wins = updated.wins;
+        player.games = updated.games;
+        player.avatar = updated.avatar;
+        if (!player.name || player.name.trim().length === 0) {
+          player.name = updated.name;
+        }
+      }
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to record game result', error);
     }
-  });
+  }
 }
 
-function emitRoomUpdate(room) {
-  processResults(room);
+async function emitRoomUpdate(room) {
+  await processResults(room);
   const state = room.game.getState();
   io.to(room.id).emit('roomUpdate', {
     roomId: room.id,
@@ -206,7 +222,7 @@ app.post('/auth/google', async (req, res) => {
       res.status(401).json({ error: 'Invalid Google credential' });
       return;
     }
-    const profile = profileStore.ensureProfile({
+    const profile = await profileStore.ensureProfile({
       googleSub: payload.sub,
       email: payload.email,
       name: payload.name,
@@ -233,13 +249,13 @@ app.post('/auth/logout', (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/auth/session', (req, res) => {
+app.get('/auth/session', async (req, res) => {
   const result = resolveSessionFromRequest(req);
   if (!result) {
     res.status(401).json({ error: 'Invalid session' });
     return;
   }
-  const profile = profileStore.getById(result.session.profileId);
+  const profile = await profileStore.getById(result.session.profileId);
   if (!profile) {
     res.status(404).json({ error: 'Profile not found' });
     return;
@@ -251,7 +267,7 @@ app.get('/auth/session', (req, res) => {
   });
 });
 
-function handleAiTurns(room) {
+async function handleAiTurns(room) {
   const { game } = room;
   let iterationSafety = 0;
   while (game.phase === 'playing' && game.currentPlayer && game.currentPlayer.isAi) {
@@ -262,7 +278,8 @@ function handleAiTurns(room) {
     const player = game.currentPlayer;
     try {
       game.rollDice(player.id);
-      emitRoomUpdate(room);
+      // eslint-disable-next-line no-await-in-loop
+      await emitRoomUpdate(room);
       if (game.turnState.awaitingMove) {
         const choice = chooseAiMove(game, player);
         if (!choice) {
@@ -271,7 +288,8 @@ function handleAiTurns(room) {
           break;
         }
         game.moveToken(player.id, choice.tokenIndex);
-        emitRoomUpdate(room);
+        // eslint-disable-next-line no-await-in-loop
+        await emitRoomUpdate(room);
       }
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -282,58 +300,71 @@ function handleAiTurns(room) {
 }
 
 io.on('connection', (socket) => {
-  socket.on('joinRoom', (payload, ack = () => {}) => {
-    const { roomId, playerName, sessionToken } = payload || {};
+  socket.on('joinRoom', async (payload, ack = () => {}) => {
+    const { roomId, playerName, sessionToken, mode } = payload || {};
     if (!roomId || typeof roomId !== 'string') {
       ack({ error: 'Room ID is required' });
       return;
     }
-    if (!sessionToken) {
-      ack({ error: 'Authentication required' });
-      return;
-    }
-    const session = sessionManager.getSession(sessionToken);
-    if (!session) {
-      ack({ error: 'Invalid or expired session' });
-      return;
-    }
-    const profile = profileStore.getById(session.profileId);
-    if (!profile) {
-      ack({ error: 'Profile not found' });
-      return;
-    }
-    const room = roomManager.getOrCreate(roomId);
     try {
-      const duplicate = room.game.players.find(
-        (existing) => existing.profileId && existing.profileId === profile.id,
-      );
-      if (duplicate) {
-        ack({ error: 'You are already in this room from another session' });
-        return;
+      const isGuest = !sessionToken || mode === 'guest';
+      let profile = null;
+      if (!isGuest) {
+        const session = sessionManager.getSession(sessionToken);
+        if (!session) {
+          ack({ error: 'Invalid or expired session' });
+          return;
+        }
+        profile = await profileStore.getById(session.profileId);
+        if (!profile) {
+          ack({ error: 'Profile not found' });
+          return;
+        }
+      }
+      const room = roomManager.getOrCreate(roomId);
+      if (profile) {
+        const duplicate = room.game.players.find(
+          (existing) => existing.profileId && existing.profileId === profile.id,
+        );
+        if (duplicate) {
+          ack({ error: 'You are already in this room from another session' });
+          return;
+        }
       }
       const player = room.game.addPlayer({
         socketId: socket.id,
-        name: playerName?.trim() || profile.name || profile.email || 'Player',
-        profileId: profile.id,
-        avatar: profile.avatar,
-        wins: profile.wins,
-        games: profile.games,
+        name:
+          playerName?.trim() ||
+          profile?.name ||
+          profile?.email ||
+          `Guest ${Math.floor(Math.random() * 900 + 100)}`,
+        profileId: profile?.id ?? null,
+        avatar: profile?.avatar ?? null,
+        wins: profile?.wins ?? null,
+        games: profile?.games ?? null,
+        isGuest,
       });
       roomManager.setSocketRoom(socket.id, room.id);
       socket.join(room.id);
       socket.data.roomId = room.id;
       socket.data.playerId = player.id;
-      socket.data.profileId = profile.id;
-      socket.data.sessionToken = sessionToken;
-      ack({ ok: true, player, room: room.id, profile: getProfileSummary(profile) });
-      emitRoomUpdate(room);
-      handleAiTurns(room);
+      socket.data.profileId = profile?.id ?? null;
+      socket.data.sessionToken = sessionToken ?? null;
+      socket.data.isGuest = isGuest;
+      ack({
+        ok: true,
+        player,
+        room: room.id,
+        profile: profile ? getProfileSummary(profile) : null,
+      });
+      await emitRoomUpdate(room);
+      await handleAiTurns(room);
     } catch (err) {
-      ack({ error: err.message });
+      ack({ error: err.message || 'Failed to join room' });
     }
   });
 
-  socket.on('addAiPlayer', (payload, ack = () => {}) => {
+  socket.on('addAiPlayer', async (payload, ack = () => {}) => {
     const { roomId, playerId } = socket.data || {};
     if (!roomId) {
       ack({ error: 'Not in a room' });
@@ -353,14 +384,14 @@ io.on('connection', (socket) => {
       const { difficulty = 'easy' } = payload || {};
       const player = room.game.addAiPlayer(difficulty);
       ack({ ok: true, player });
-      emitRoomUpdate(room);
-      handleAiTurns(room);
+      await emitRoomUpdate(room);
+      await handleAiTurns(room);
     } catch (err) {
-      ack({ error: err.message });
+      ack({ error: err.message || 'Failed to add AI player' });
     }
   });
 
-  socket.on('startGame', (ack = () => {}) => {
+  socket.on('startGame', async (ack = () => {}) => {
     const { roomId, playerId } = socket.data || {};
     if (!roomId) {
       ack({ error: 'Not in a room' });
@@ -373,15 +404,15 @@ io.on('connection', (socket) => {
     }
     try {
       room.game.startGame(playerId);
-      emitRoomUpdate(room);
-      handleAiTurns(room);
+      await emitRoomUpdate(room);
+      await handleAiTurns(room);
       ack({ ok: true });
     } catch (err) {
-      ack({ error: err.message });
+      ack({ error: err.message || 'Failed to start game' });
     }
   });
 
-  socket.on('rollDice', (ack = () => {}) => {
+  socket.on('rollDice', async (ack = () => {}) => {
     const { roomId, playerId } = socket.data || {};
     if (!roomId) {
       ack({ error: 'Not in a room' });
@@ -394,15 +425,15 @@ io.on('connection', (socket) => {
     }
     try {
       const value = room.game.rollDice(playerId);
-      emitRoomUpdate(room);
-      handleAiTurns(room);
+      await emitRoomUpdate(room);
+      await handleAiTurns(room);
       ack({ ok: true, value });
     } catch (err) {
-      ack({ error: err.message });
+      ack({ error: err.message || 'Failed to roll dice' });
     }
   });
 
-  socket.on('moveToken', (payload, ack = () => {}) => {
+  socket.on('moveToken', async (payload, ack = () => {}) => {
     const { roomId, playerId } = socket.data || {};
     if (!roomId) {
       ack({ error: 'Not in a room' });
@@ -416,11 +447,11 @@ io.on('connection', (socket) => {
     try {
       const { tokenIndex } = payload || {};
       room.game.moveToken(playerId, tokenIndex);
-      emitRoomUpdate(room);
-      handleAiTurns(room);
+      await emitRoomUpdate(room);
+      await handleAiTurns(room);
       ack({ ok: true });
     } catch (err) {
-      ack({ error: err.message });
+      ack({ error: err.message || 'Failed to move token' });
     }
   });
 
@@ -434,7 +465,7 @@ io.on('connection', (socket) => {
     ack({ ok: true, state: room.game.getState() });
   });
 
-  socket.on('disconnect', () => {
+  socket.on('disconnect', async () => {
     const removal = roomManager.removeSocket(socket.id);
     if (!removal) {
       return;
@@ -442,8 +473,8 @@ io.on('connection', (socket) => {
     const { roomId } = removal;
     const room = roomManager.rooms.get(roomId);
     if (room) {
-      emitRoomUpdate(room);
-      handleAiTurns(room);
+      await emitRoomUpdate(room);
+      await handleAiTurns(room);
     }
   });
 });

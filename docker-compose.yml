@@ -1,0 +1,41 @@
+version: '3.9'
+
+services:
+  app:
+    build: .
+    ports:
+      - '3000:3000'
+    environment:
+      PORT: '3000'
+      GOOGLE_CLIENT_ID: '${GOOGLE_CLIENT_ID}'
+      MYSQL_HOST: db
+      MYSQL_PORT: '3306'
+      MYSQL_USER: ludo_user
+      MYSQL_PASSWORD: ludo_pass
+      MYSQL_DATABASE: ludo
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: ludo
+      MYSQL_USER: ludo_user
+      MYSQL_PASSWORD: ludo_pass
+    ports:
+      - '3306:3306'
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+
