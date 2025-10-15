@@ -108,5 +108,4 @@ Open `http://localhost:3000` in the browser. Use Google sign-in to create/join r
 
 ## License
 
-ISC License (see `LICENSE` if added) or align with organisation needs.
-
+[MIT](./LICENSE)
