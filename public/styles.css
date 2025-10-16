@@ -235,6 +235,18 @@ body {
   color: #94a3b8;
 }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .hint {
   color: #9ca3af;
   margin-top: 1rem;
@@ -325,6 +337,70 @@ body {
   align-items: center;
   gap: 0.5rem;
   font-size: 1.25rem;
+}
+
+.dice-output {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 400px;
+}
+
+.dice-face {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  border: 2px solid rgba(148, 163, 184, 0.4);
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.15), rgba(15, 23, 42, 0.9));
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.45);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 4px;
+  padding: 6px;
+  transform-style: preserve-3d;
+  transition: transform 0.2s ease;
+}
+
+.dice-face.rolling {
+  animation: dice-roll 0.6s ease;
+}
+
+@keyframes dice-roll {
+  0% {
+    transform: rotateX(0deg) rotateY(0deg);
+  }
+  25% {
+    transform: rotateX(180deg) rotateY(30deg);
+  }
+  50% {
+    transform: rotateX(360deg) rotateY(90deg);
+  }
+  75% {
+    transform: rotateX(540deg) rotateY(150deg);
+  }
+  100% {
+    transform: rotateX(720deg) rotateY(180deg);
+  }
+}
+
+.dice-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #f8fafc;
+  opacity: 0;
+  align-self: center;
+  justify-self: center;
+  box-shadow: 0 0 4px rgba(248, 250, 252, 0.6);
+  transition: opacity 0.15s ease;
+}
+
+.dice-dot.active {
+  opacity: 1;
 }
 
 .status-message {

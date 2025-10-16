@@ -409,6 +409,9 @@ const state = {
   config: {
     googleClientId: null,
   },
+  ui: {
+    lastDiceRollTimestamp: null,
+  },
 };
 
 const joinSection = document.getElementById('join-section');
@@ -439,6 +442,8 @@ const boardCanvas = document.getElementById('board-canvas');
 const aiControls = document.getElementById('ai-controls');
 const aiDifficultySelect = document.getElementById('ai-difficulty');
 const addAiBtn = document.getElementById('add-ai-btn');
+const diceOutput = document.getElementById('dice-output');
+const diceFace = document.getElementById('dice-face');
 const renderer = new BoardRenderer(boardCanvas);
 if (window.ResizeObserver) {
   const resizeObserver = new ResizeObserver(() => renderer.rescale());
@@ -452,6 +457,54 @@ function randomRoomId() {
   const noun = nouns[Math.floor(Math.random() * nouns.length)];
   const suffix = Math.floor(Math.random() * 899 + 101);
   return `${adjective}-${noun}-${suffix}`.toLowerCase();
+}
+
+const DICE_PATTERNS = {
+  1: [4],
+  2: [0, 8],
+  3: [0, 4, 8],
+  4: [0, 2, 6, 8],
+  5: [0, 2, 4, 6, 8],
+  6: [0, 2, 3, 5, 6, 8],
+};
+
+const diceDots = diceFace ? Array.from(diceFace.querySelectorAll('.dice-dot')) : [];
+const diceState = {
+  timeout: null,
+};
+
+function renderDice(value, animate = false) {
+  if (!diceFace) {
+    return;
+  }
+  const numeric = Number(value);
+  const valid = Number.isInteger(numeric) && numeric >= 1 && numeric <= 6 ? numeric : null;
+  const pattern = valid ? DICE_PATTERNS[valid] || [] : [];
+  diceDots.forEach((dot, index) => {
+    dot.classList.toggle('active', pattern.includes(index));
+  });
+  const label = valid ? `Dice shows ${valid}` : 'No dice rolled yet';
+  if (diceOutput) {
+    diceOutput.setAttribute('aria-label', label);
+  }
+  if (diceValue) {
+    diceValue.textContent = valid ?? '–';
+  }
+  if (animate && valid) {
+    diceFace.classList.remove('rolling');
+    // Force reflow to restart animation
+    void diceFace.offsetWidth;
+    diceFace.classList.add('rolling');
+    if (diceState.timeout) {
+      clearTimeout(diceState.timeout);
+    }
+    diceState.timeout = setTimeout(() => {
+      diceFace.classList.remove('rolling');
+      diceState.timeout = null;
+    }, 600);
+  } else {
+    diceFace.classList.remove('rolling');
+  }
 }
 
 function setAuthMessage(message) {
@@ -820,7 +873,8 @@ function updateControls() {
   if (!state.player) {
     startBtn.disabled = true;
     rollBtn.disabled = true;
-    diceValue.textContent = '–';
+    renderDice(null, false);
+    state.ui.lastDiceRollTimestamp = null;
     statusMessage.textContent = '';
     if (aiControls) {
       aiControls.classList.add('hidden');
@@ -858,11 +912,18 @@ function updateControls() {
   const inPlay = game?.phase === 'playing';
   rollBtn.disabled = !(inPlay && isCurrent && !awaitingMove && !diceLocked);
 
-  const displayValue =
-    (game?.turn?.dice ?? game?.turn?.lastRoll?.value ?? null) !== null
-      ? game.turn.dice ?? game.turn.lastRoll.value
-      : '–';
-  diceValue.textContent = displayValue;
+  const rawDiceValue = game?.turn?.dice ?? game?.turn?.lastRoll?.value ?? null;
+  const currentDiceValue = Number.isInteger(rawDiceValue) ? rawDiceValue : null;
+  const lastRollTimestamp = game?.turn?.lastRoll?.at ?? null;
+  const shouldAnimate = Boolean(
+    currentDiceValue && lastRollTimestamp && state.ui.lastDiceRollTimestamp !== lastRollTimestamp,
+  );
+  renderDice(currentDiceValue, shouldAnimate);
+  if (shouldAnimate) {
+    state.ui.lastDiceRollTimestamp = lastRollTimestamp;
+  } else if (!lastRollTimestamp && game?.turn?.dice == null) {
+    state.ui.lastDiceRollTimestamp = null;
+  }
 
   let message = '';
   if (!game) {
@@ -904,6 +965,8 @@ function renderGame() {
       currentPlayerId: state.player?.id ?? null,
       availableMoves: new Set(),
     });
+    renderDice(null, false);
+    state.ui.lastDiceRollTimestamp = null;
     return;
   }
   roomCode.textContent = state.roomId || '—';
@@ -1181,3 +1244,4 @@ renderer.draw(null, {
   currentPlayerId: null,
   availableMoves: new Set(),
 });
+renderDice(null, false);

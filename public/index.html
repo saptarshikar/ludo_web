@@ -79,7 +79,20 @@
             </div>
             <div class="dice-display" aria-live="polite">
               <span>Dice:</span>
-              <strong id="dice-value">–</strong>
+              <div id="dice-output" class="dice-output" role="img" aria-label="No dice rolled yet">
+                <div id="dice-face" class="dice-face">
+                  <span class="dice-dot" data-index="0"></span>
+                  <span class="dice-dot" data-index="1"></span>
+                  <span class="dice-dot" data-index="2"></span>
+                  <span class="dice-dot" data-index="3"></span>
+                  <span class="dice-dot" data-index="4"></span>
+                  <span class="dice-dot" data-index="5"></span>
+                  <span class="dice-dot" data-index="6"></span>
+                  <span class="dice-dot" data-index="7"></span>
+                  <span class="dice-dot" data-index="8"></span>
+                </div>
+              </div>
+              <span id="dice-value" class="visually-hidden">–</span>
             </div>
             <p id="status-message" class="status-message"></p>
           </div>

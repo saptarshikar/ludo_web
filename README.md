@@ -10,6 +10,7 @@ Web-based multiplayer Ludo supporting 2–4 players, real-time board updates, op
 - **Google authentication** to create persistent profiles, reuse avatars, and track win/loss records.
 - **Guest mode** so players can jump into a room without signing in (no stats recorded).
 - **Automatic stat tracking** that updates profile wins and games at the end of every match.
+- **Animated dice rolls** with a six-sided die visual rather than plain numbers.
 - **Responsive layout** optimised for desktop and tablet with a modern dark theme.
 
 ## Tech Stack
