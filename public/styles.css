@@ -223,6 +223,12 @@ body {
   cursor: not-allowed;
 }
 
+.debug-btn {
+  margin-top: 0.25rem;
+  font-size: 0.9rem;
+  opacity: 0.85;
+}
+
 .form-error {
   min-height: 1.2rem;
   color: #f87171;
@@ -526,12 +532,188 @@ body {
   padding: 1rem;
 }
 
+.board-stage {
+  position: relative;
+  width: 100%;
+  max-width: 660px;
+}
+
 #board-canvas {
   width: 100%;
   height: auto;
   border-radius: 18px;
   background: rgba(10, 15, 30, 0.65);
   border: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.fireworks-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: 18px;
+}
+
+.firework {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fde68a;
+  opacity: 0;
+  animation: firework-explode 1.2s ease forwards;
+  box-shadow: 0 0 10px rgba(253, 224, 138, 0.9);
+}
+
+.firework--rocket {
+  width: 5px;
+  height: 16px;
+  border-radius: 999px;
+  animation: firework-rocket 1.6s ease-in forwards;
+}
+
+.firework--rocket::before {
+  content: '';
+  position: absolute;
+  inset: auto 0 -18px 0;
+  height: 18px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(59, 130, 246, 0));
+  opacity: 0.7;
+}
+
+.firework--cracker {
+  width: 7px;
+  height: 7px;
+  animation-duration: 1.4s;
+}
+
+.firework--sparkle {
+  width: 5px;
+  height: 5px;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+  animation: firework-sparkle 1.2s ease-in-out forwards;
+}
+
+@keyframes firework-explode {
+  0% {
+    transform: scale(0.2);
+    opacity: 0.95;
+  }
+  60% {
+    transform: scale(1.6);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.1);
+    opacity: 0;
+  }
+}
+
+.firework::after,
+.firework::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: inherit;
+  opacity: 0.6;
+}
+
+.firework:not(.firework--rocket)::after {
+  transform: rotate(45deg);
+}
+
+.winner-banner {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1.2rem 2.4rem;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.82);
+  border: 2px solid rgba(250, 204, 21, 0.6);
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.55);
+  text-align: center;
+  animation: winner-pop 0.6s ease;
+  pointer-events: none;
+}
+
+.winner-banner.hidden {
+  display: none;
+}
+
+.winner-banner__title {
+  font-size: 1.4rem;
+  letter-spacing: 0.4rem;
+  color: #facc15;
+  font-weight: 700;
+  text-transform: uppercase;
+  animation: winner-text-glow 1.4s ease-in-out infinite alternate;
+}
+
+.winner-banner__name {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #f8fafc;
+  text-transform: uppercase;
+}
+
+@keyframes winner-pop {
+  0% {
+    transform: translate(-50%, -50%) scale(0.5);
+    opacity: 0;
+  }
+  60% {
+    transform: translate(-50%, -50%) scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes winner-text-glow {
+  from {
+    text-shadow: 0 0 8px rgba(250, 204, 21, 0.6), 0 0 16px rgba(250, 204, 21, 0.3);
+  }
+  to {
+    text-shadow: 0 0 18px rgba(250, 204, 21, 0.9), 0 0 32px rgba(250, 204, 21, 0.5);
+  }
+}
+
+@keyframes firework-rocket {
+  0% {
+    transform: translate3d(0, 120%, 0) scale(0.6);
+    opacity: 1;
+  }
+  60% {
+    transform: translate3d(0, -40%, 0) scale(1.05);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(0, -120%, 0) scale(0.1);
+    opacity: 0;
+  }
+}
+
+@keyframes firework-sparkle {
+  0% {
+    transform: scale(0.4);
+    opacity: 0.7;
+  }
+  40% {
+    transform: scale(1.4);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.1);
+    opacity: 0;
+  }
 }
 
 @media (max-width: 1100px) {

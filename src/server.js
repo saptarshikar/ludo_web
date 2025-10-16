@@ -455,6 +455,49 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('debugEndGame', async (ack = () => {}) => {
+    const { roomId, playerId } = socket.data || {};
+    if (!roomId) {
+      ack({ error: 'Not in a room' });
+      return;
+    }
+    const room = roomManager.rooms.get(roomId);
+    if (!room) {
+      ack({ error: 'Room missing' });
+      return;
+    }
+    const hostId = room.game.players[0]?.id;
+    if (hostId !== playerId) {
+      ack({ error: 'Only the host can trigger a test win' });
+      return;
+    }
+    if (room.game.players.length === 0) {
+      ack({ error: 'No players available to declare winner' });
+      return;
+    }
+    if (room.game.phase === 'finished') {
+      ack({ error: 'Game already finished' });
+      return;
+    }
+    const winnerIndex = Math.floor(Math.random() * room.game.players.length);
+    const winner = room.game.players[winnerIndex];
+    room.game.phase = 'finished';
+    room.game.winnerId = winner.id;
+    room.game.pendingResults = {
+      winnerId: winner.id,
+      participants: room.game.players.map((participant) => ({
+        playerId: participant.id,
+        profileId: participant.profileId,
+      })),
+    };
+    room.game.pushHistory({
+      type: 'system',
+      message: `[TEST] ${winner.name} declared winner`,
+    });
+    await emitRoomUpdate(room);
+    ack({ ok: true, winnerId: winner.id });
+  });
+
   socket.on('requestState', (ack = () => {}) => {
     const { roomId } = socket.data || {};
     const room = roomId ? roomManager.rooms.get(roomId) : null;

@@ -95,6 +95,10 @@
               <span id="dice-value" class="visually-hidden">–</span>
             </div>
             <p id="status-message" class="status-message"></p>
+            <!-- Development helper: remove or hide before shipping -->
+            <button id="debug-win-btn" class="control-btn tertiary debug-btn">
+              Trigger Test Win
+            </button>
           </div>
           <div class="players-panel">
             <h3>Players</h3>
@@ -106,7 +110,14 @@
           </div>
         </aside>
         <div class="board-wrapper">
-          <canvas id="board-canvas" width="660" height="660" aria-label="Ludo board"></canvas>
+          <div class="board-stage">
+            <canvas id="board-canvas" width="660" height="660" aria-label="Ludo board"></canvas>
+            <div id="fireworks-layer" class="fireworks-layer hidden" aria-hidden="true"></div>
+            <div id="winner-banner" class="winner-banner hidden" role="status" aria-live="assertive">
+              <span class="winner-banner__title">WINNER</span>
+              <span id="winner-name" class="winner-banner__name"></span>
+            </div>
+          </div>
         </div>
       </section>
     </main>

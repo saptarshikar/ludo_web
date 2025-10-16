@@ -411,6 +411,8 @@ const state = {
   },
   ui: {
     lastDiceRollTimestamp: null,
+    lastWinnerId: null,
+    fireworksStopper: null,
   },
 };
 
@@ -444,11 +446,16 @@ const aiDifficultySelect = document.getElementById('ai-difficulty');
 const addAiBtn = document.getElementById('add-ai-btn');
 const diceOutput = document.getElementById('dice-output');
 const diceFace = document.getElementById('dice-face');
+const debugWinBtn = document.getElementById('debug-win-btn');
 const renderer = new BoardRenderer(boardCanvas);
 if (window.ResizeObserver) {
   const resizeObserver = new ResizeObserver(() => renderer.rescale());
   resizeObserver.observe(boardCanvas);
 }
+
+const fireworksLayer = document.getElementById('fireworks-layer');
+const winnerBanner = document.getElementById('winner-banner');
+const winnerName = document.getElementById('winner-name');
 
 function randomRoomId() {
   const adjectives = ['lucky', 'swift', 'brave', 'spark', 'bright', 'eager', 'bold'];
@@ -504,6 +511,111 @@ function renderDice(value, animate = false) {
     }, 600);
   } else {
     diceFace.classList.remove('rolling');
+  }
+}
+
+function clearFireworks() {
+  if (!fireworksLayer) {
+    return;
+  }
+  fireworksLayer.innerHTML = '';
+}
+
+function stopFireworks() {
+  if (state.ui.fireworksStopper) {
+    state.ui.fireworksStopper();
+    state.ui.fireworksStopper = null;
+  }
+  if (fireworksLayer) {
+    fireworksLayer.classList.add('hidden');
+  }
+  clearFireworks();
+}
+
+function spawnFirework(type) {
+  if (!fireworksLayer) {
+    return;
+  }
+  const firework = document.createElement('span');
+  firework.className = `firework firework--${type}`;
+  const hue = Math.floor(Math.random() * 360);
+  const saturation = 80 + Math.random() * 20;
+  const lightness = 55 + Math.random() * 20;
+  const color = `hsl(${hue}deg ${saturation}% ${lightness}%)`;
+  firework.style.background = color;
+  firework.style.boxShadow = `0 0 16px ${color}`;
+
+  if (type === 'rocket') {
+    firework.style.left = `${Math.random() * 90 + 5}%`;
+    firework.style.bottom = '-10%';
+    firework.style.top = 'auto';
+    firework.style.animationDelay = `${Math.random() * 0.5}s`;
+  } else {
+    firework.style.left = `${Math.random() * 100}%`;
+    firework.style.top = `${Math.random() * 100}%`;
+    firework.style.bottom = 'auto';
+    firework.style.animationDelay = `${Math.random() * 1}s`;
+  }
+
+  fireworksLayer.appendChild(firework);
+  setTimeout(() => {
+    firework.remove();
+  }, 2400);
+}
+
+function startFireworks() {
+  if (!fireworksLayer) {
+    return;
+  }
+  stopFireworks();
+  clearFireworks();
+  fireworksLayer.classList.remove('hidden');
+
+  const durationMs = 15000;
+  const startTime = Date.now();
+
+  const interval = setInterval(() => {
+    const elapsed = Date.now() - startTime;
+    if (elapsed >= durationMs) {
+      stopFireworks();
+      return;
+    }
+    const burstCount = 2 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < burstCount; i += 1) {
+      const roll = Math.random();
+      const type = roll < 0.33 ? 'rocket' : roll < 0.66 ? 'cracker' : 'sparkle';
+      spawnFirework(type);
+    }
+  }, 350);
+
+  const timeout = setTimeout(() => {
+    stopFireworks();
+  }, durationMs + 500);
+
+  state.ui.fireworksStopper = () => {
+    clearInterval(interval);
+    clearTimeout(timeout);
+    fireworksLayer.classList.add('hidden');
+    clearFireworks();
+    state.ui.fireworksStopper = null;
+  };
+}
+
+function showWinnerBanner(name) {
+  if (!winnerBanner || !winnerName) {
+    return;
+  }
+  winnerName.textContent = name || 'Winner';
+  winnerBanner.classList.remove('hidden');
+}
+
+function hideWinnerBanner() {
+  if (!winnerBanner) {
+    return;
+  }
+  winnerBanner.classList.add('hidden');
+  if (winnerName) {
+    winnerName.textContent = '';
   }
 }
 
@@ -899,6 +1011,11 @@ function updateControls() {
     }
   }
 
+  if (debugWinBtn) {
+    const hasPlayers = (game?.players?.length ?? 0) > 0;
+    debugWinBtn.disabled = !(isHost && hasPlayers && game?.phase !== 'finished');
+  }
+
   const canStart =
     isHost &&
     game?.phase !== 'playing' &&
@@ -967,6 +1084,9 @@ function renderGame() {
     });
     renderDice(null, false);
     state.ui.lastDiceRollTimestamp = null;
+    state.ui.lastWinnerId = null;
+    hideWinnerBanner();
+    stopFireworks();
     return;
   }
   roomCode.textContent = state.roomId || '—';
@@ -987,6 +1107,18 @@ function renderGame() {
     playerBadge.textContent = `${base}${record}`;
   } else {
     playerBadge.textContent = '—';
+  }
+  if (game.winnerId && state.ui.lastWinnerId !== game.winnerId) {
+    const winner = game.players.find((p) => p.id === game.winnerId);
+    if (winner) {
+      startFireworks();
+      showWinnerBanner(winner.name);
+    }
+    state.ui.lastWinnerId = game.winnerId;
+  } else if (!game.winnerId && state.ui.lastWinnerId !== null) {
+    hideWinnerBanner();
+    stopFireworks();
+    state.ui.lastWinnerId = null;
   }
   updatePlayers(game.players, game.currentPlayerId, game.winnerId);
   updateHistory(game.history || [], game.players);
@@ -1130,6 +1262,19 @@ if (addAiBtn) {
   });
 }
 
+if (debugWinBtn) {
+  debugWinBtn.addEventListener('click', () => {
+    if (debugWinBtn.disabled) {
+      return;
+    }
+    socket.emit('debugEndGame', (response = {}) => {
+      if (response.error) {
+        statusMessage.textContent = response.error;
+      }
+    });
+  });
+}
+
 function canvasCoordinates(event) {
   const rect = boardCanvas.getBoundingClientRect();
   return {
@@ -1245,3 +1390,10 @@ renderer.draw(null, {
   availableMoves: new Set(),
 });
 renderDice(null, false);
+
+window.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    stopFireworks();
+    hideWinnerBanner();
+  }
+});

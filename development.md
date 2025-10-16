@@ -101,6 +101,8 @@ AI turns run on the server; `handleAiTurns` loops until a human’s turn or max 
 - **Guest mode**: click *Continue as Guest* to validate flows without authentication (stats will not persist).
 - **AI**: Add AI players to speed up testing end-of-game stats.
 - **Profiles**: Inspect the `profiles` table (`SELECT * FROM profiles;`) after games to confirm wins/games increments.
+- **Force win**: use the “Trigger Test Win” button (host only) to randomly declare a winner and exercise end-of-game UI.
+- **Skip celebration**: press `Esc` to cancel the 15s fireworks sequence during winner celebrations.
 - **Syntax**: Quick checks with
   ```bash
   node --check src/server.js

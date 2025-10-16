@@ -143,6 +143,7 @@ Adjust them (and the matching env vars on the `app` service) as needed.
    - AI players automatically roll and choose moves based on difficulty heuristics.
 5. **Results**
    - Upon win, stats update (`wins`, `games`) and propagate to connected clients.
+   - A celebratory fireworks show and banner appear (press `Esc` to skip).
 
 ## AI Difficulty
 
