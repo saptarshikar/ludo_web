@@ -26,6 +26,19 @@ function mapRoomSummary(room) {
   };
 }
 
+/**
+ * @param {import('socket.io').Server} io
+ * @param {{
+ *   coordinator: import('../../domain/contracts/GameCoordinator').GameCoordinator,
+ *   sessionStore: {
+ *     getSession: (token: string) => { profileId: string } | null,
+ *     revokeSession: (token: string) => void,
+ *   },
+ *   profileRepository: {
+ *     findById: (id: string) => Promise<any>,
+ *   },
+ * }} context
+ */
 function registerGameSocketHandlers(io, {
   coordinator,
   sessionStore,

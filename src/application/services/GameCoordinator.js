@@ -108,6 +108,9 @@ function selectAiMove(game, player, moves) {
   }
 }
 
+/**
+ * @implements {import('../../domain/contracts/GameCoordinator').GameCoordinator}
+ */
 class GameCoordinator {
   constructor({ roomRegistry, profileRepository }) {
     this.roomRegistry = roomRegistry;

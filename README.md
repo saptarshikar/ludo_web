@@ -32,7 +32,10 @@ Web-based multiplayer Ludo supporting 2–4 players, real-time board updates, op
 
 | Variable | Description |
 | --- | --- |
-| `PORT` | Port to run the server on (defaults to `3000`). |
+| `PORT` | Port for the combined server (`npm start`). Defaults to `3000`. |
+| `HTTP_PORT` | Port for the HTTP service when running separately. Defaults to `3000`. |
+| `SOCKET_PORT` | Port for the Socket.IO service when running separately. Defaults to `3001`. |
+| `SOCKET_URL` | Absolute URL for the Socket.IO service when decoupled (e.g. `http://localhost:3001`). |
 | `GOOGLE_CLIENT_ID` | OAuth 2.0 Web Client ID for Google Sign-In. Required for authentication features. |
 | `MYSQL_HOST` | MySQL host (`localhost`, `db`, etc.). |
 | `MYSQL_PORT` | MySQL port (defaults to `3306`). |
@@ -61,7 +64,7 @@ MYSQL_PASSWORD=ludo_pass
 MYSQL_DATABASE=ludo
 ```
 
-Run the server:
+Run the combined server (HTTP + Socket.IO):
 
 ```bash
 npm start
@@ -70,6 +73,15 @@ npm start
 Open `http://localhost:3000` in the browser. Use Google sign-in to create/join rooms. Share the room ID with friends so they can join the same lobby.
 
 > Tip: Click “Continue as Guest” to play without signing in (stats will not persist).
+
+To run transport services independently:
+
+```bash
+npm run start:http
+npm run start:socket
+```
+
+Configure `SOCKET_URL` so the web app knows where to connect to Socket.IO (e.g. `http://localhost:3001`). For production, replace the in-memory session store with a shared implementation to keep tokens in sync across processes.
 
 ### Tests
 
@@ -129,9 +141,11 @@ Adjust them (and the matching env vars on the `app` service) as needed.
 ├── src/
 │   ├── domain/              # Game rules, entities, and value objects
 │   ├── application/         # Use-case orchestration (GameCoordinator)
+│   ├── bootstrap/           # Dependency composition
 │   ├── infrastructure/      # Persistence, sessions, room registry, database
 │   ├── interfaces/          # HTTP routes and socket event handlers
-│   └── server.js            # Composition root
+│   ├── services/            # Standalone HTTP and Socket.IO bootstraps
+│   └── server.js            # Combined composition root
 ├── README.md                # Project overview
 └── development.md           # Contributing and dev guides
 ```

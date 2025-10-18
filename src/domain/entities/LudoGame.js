@@ -473,6 +473,10 @@ class LudoGame {
   }
 }
 
+/**
+ * @typedef {ReturnType<LudoGame['getState']>} LudoGameState
+ */
+
 module.exports = {
   LudoGame,
   GAME_PHASE,

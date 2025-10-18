@@ -1,34 +1,24 @@
 const http = require('http');
-const express = require('express');
-const { Server } = require('socket.io');
+const { createApplicationContext } = require('./bootstrap/createApplicationContext');
+const { createHttpApp } = require('./interfaces/http/createHttpApp');
+const { createGameSocketServer } = require('./interfaces/socket/createGameSocketServer');
 
-const { MySqlProfileRepository } = require('./infrastructure/persistence/MySqlProfileRepository');
-const { InMemorySessionStore } = require('./infrastructure/sessions/InMemorySessionStore');
-const { RoomRegistry } = require('./infrastructure/rooms/RoomRegistry');
-const { GameCoordinator } = require('./application/services/GameCoordinator');
-const { registerHttpEndpoints } = require('./interfaces/http/registerHttpEndpoints');
-const { registerGameSocketHandlers } = require('./interfaces/socket/registerGameSocketHandlers');
-
-const PORT = process.env.PORT || 3000;
+const PORT = Number.parseInt(process.env.PORT || '3000', 10);
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || null;
+const SOCKET_URL = process.env.SOCKET_URL || null;
 
 async function bootstrap() {
-  const app = express();
-  const server = http.createServer(app);
-  const io = new Server(server);
+  const { coordinator, profileRepository, sessionStore } = createApplicationContext();
 
-  const profileRepository = new MySqlProfileRepository();
-  const sessionStore = new InMemorySessionStore();
-  const roomRegistry = new RoomRegistry();
-  const coordinator = new GameCoordinator({ roomRegistry, profileRepository });
-
-  registerHttpEndpoints(app, {
+  const app = createHttpApp({
     googleClientId: GOOGLE_CLIENT_ID,
+    socketUrl: SOCKET_URL,
     profileRepository,
     sessionStore,
   });
 
-  registerGameSocketHandlers(io, {
+  const server = http.createServer(app);
+  createGameSocketServer(server, {
     coordinator,
     sessionStore,
     profileRepository,

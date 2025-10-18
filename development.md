@@ -34,15 +34,30 @@ For the database you can either run `docker-compose up db` (recommended) or poin
 
 ## Running
 
+### Combined development server
+
 ```bash
 npm start
 ```
 
-The server hosts both API endpoints and static assets:
+The combined server hosts both the HTTP API/static assets and the Socket.IO endpoint on the same port (default `3000`).
 
-- http://localhost:3000 — Main UI
-- `/health` — Liveness check
-- `/config` — Google client config returned to the client
+### Independent services
+
+The HTTP and WebSocket transports can now be started individually:
+
+```bash
+npm run start:http
+npm run start:socket
+```
+
+- `start:http` serves static assets and REST endpoints. Configure `HTTP_PORT` (default `3000`).
+- `start:socket` exposes the Socket.IO transport. Configure `SOCKET_PORT` (default `3001`).
+- When running them separately, expose the socket origin to the client via `SOCKET_URL` (for example `http://localhost:3001`).
+
+> ⚠️ The default in-memory session store is process-local. For multi-process deployments swap in a shared session implementation so both services observe the same tokens.
+
+Both services expose `/health` for liveness checks.
 
 ### Docker workflow
 
@@ -57,8 +72,13 @@ This builds the application image, starts the Node server, and launches a MySQL 
 
 | File | Purpose |
 | --- | --- |
-| `src/server.js` | Composition root wiring Express, Socket.IO, and dependencies. |
+| `src/server.js` | Combined composition root wiring the HTTP app and Socket.IO transport. |
+| `src/services/httpService.js` | Standalone HTTP service bootstrap. |
+| `src/services/socketService.js` | Standalone Socket.IO bootstrap. |
+| `src/interfaces/http/createHttpApp.js` | Express application factory wiring routes and middleware. |
+| `src/interfaces/http/createHttpRouter.js` | Route handlers with injected dependencies. |
 | `src/domain/` | Pure game rules (`LudoGame` entity, constants, utilities). |
+| `src/domain/contracts/` | JSDoc contracts describing coordinator/service boundaries. |
 | `src/application/` | `GameCoordinator` orchestrates gameplay use cases. |
 | `src/infrastructure/rooms/RoomRegistry.js` | Manages room lifecycle and socket membership. |
 | `src/infrastructure/persistence/MySqlProfileRepository.js` | MySQL-backed profile storage. |
@@ -88,7 +108,7 @@ This builds the application image, starts the Node server, and launches a MySQL 
 
 ## AI Heuristics
 
-Implemented in `src/server.js`:
+Implemented in `src/application/services/GameCoordinator.js`:
 
 - Easy: random move.
 - Medium: tries finishing, then capturing, otherwise random.
@@ -105,11 +125,7 @@ AI turns run on the server; `handleAiTurns` loops until a human’s turn or max 
 - **Force win**: use the “Trigger Test Win” button (host only) to randomly declare a winner and exercise end-of-game UI.
 - **Skip celebration**: press `Esc` to cancel the 15s fireworks sequence during winner celebrations.
 - **Automated tests**: run `npm test` to execute the Jest suite covering domain rules and coordinator flows.
-- **Syntax**: Quick checks with
-  ```bash
-  node --check src/server.js
-  node --check src/game.js
-  ```
+- **Syntax**: Quick checks with `node --check` on individual modules such as `src/services/httpService.js` or `src/application/services/GameCoordinator.js`.
 
 ## Linting / Formatting
 
