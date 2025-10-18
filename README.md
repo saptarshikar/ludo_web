@@ -71,6 +71,14 @@ Open `http://localhost:3000` in the browser. Use Google sign-in to create/join r
 
 > Tip: Click “Continue as Guest” to play without signing in (stats will not persist).
 
+### Tests
+
+Run the Jest unit test suite covering game rules, coordinator workflows, and infrastructure adapters:
+
+```bash
+npm test
+```
+
 Ensure the MySQL database exists and the user has permission to create tables (the server bootstraps its schema automatically).
 
 ### Docker (app container)
@@ -117,15 +125,15 @@ Adjust them (and the matching env vars on the `app` service) as needed.
 ## Project Structure
 
 ```
-├── public/              # Client-side code, canvas renderer, styles
+├── public/                  # Client-side code, board renderer, styles
 ├── src/
-│   ├── server.js        # Express + Socket.IO server
-│   ├── game.js          # Ludo game engine
-│   ├── roomManager.js   # Rooms, sockets, cleanup
-│   ├── profileStore.js  # MySQL-backed profile persistence
-│   └── sessionManager.js# In-memory session tokens
-├── README.md            # Project overview
-└── development.md       # Contributing and dev guides
+│   ├── domain/              # Game rules, entities, and value objects
+│   ├── application/         # Use-case orchestration (GameCoordinator)
+│   ├── infrastructure/      # Persistence, sessions, room registry, database
+│   ├── interfaces/          # HTTP routes and socket event handlers
+│   └── server.js            # Composition root
+├── README.md                # Project overview
+└── development.md           # Contributing and dev guides
 ```
 
 ## Key Flows

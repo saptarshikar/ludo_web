@@ -57,11 +57,12 @@ This builds the application image, starts the Node server, and launches a MySQL 
 
 | File | Purpose |
 | --- | --- |
-| `src/server.js` | Express + Socket.IO server, auth endpoints, AI turn executor. |
-| `src/game.js` | Authoritative game logic, history, capture rules, win detection. |
-| `src/roomManager.js` | Tracks socket membership per room, cleans empty rooms. |
-| `src/profileStore.js` | MySQL persistence for Google profiles, wins/games. |
-| `src/sessionManager.js` | In-memory session token issue/lookup. |
+| `src/server.js` | Composition root wiring Express, Socket.IO, and dependencies. |
+| `src/domain/` | Pure game rules (`LudoGame` entity, constants, utilities). |
+| `src/application/` | `GameCoordinator` orchestrates gameplay use cases. |
+| `src/infrastructure/rooms/RoomRegistry.js` | Manages room lifecycle and socket membership. |
+| `src/infrastructure/persistence/MySqlProfileRepository.js` | MySQL-backed profile storage. |
+| `src/infrastructure/sessions/InMemorySessionStore.js` | In-memory session token handling. |
 | `public/app.js` | Client-side application: auth, lobby, canvas board. |
 | `public/styles.css` | Tailored styling for dark theme and responsive layout. |
 
@@ -103,6 +104,7 @@ AI turns run on the server; `handleAiTurns` loops until a human’s turn or max 
 - **Profiles**: Inspect the `profiles` table (`SELECT * FROM profiles;`) after games to confirm wins/games increments.
 - **Force win**: use the “Trigger Test Win” button (host only) to randomly declare a winner and exercise end-of-game UI.
 - **Skip celebration**: press `Esc` to cancel the 15s fireworks sequence during winner celebrations.
+- **Automated tests**: run `npm test` to execute the Jest suite covering domain rules and coordinator flows.
 - **Syntax**: Quick checks with
   ```bash
   node --check src/server.js

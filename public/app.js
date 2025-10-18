@@ -5,42 +5,176 @@ const SAFE_TRACK_POSITIONS = new Set([0, 8, 13, 21, 26, 34, 39, 47]);
 const PLAYER_DETAILS = {
   red: {
     name: 'Red',
-    color: '#ef4444',
-    accent: 'rgba(239,68,68,0.22)',
+    color: '#d9504a',
     startIndex: 0,
   },
   blue: {
     name: 'Blue',
-    color: '#3b82f6',
-    accent: 'rgba(59,130,246,0.22)',
+    color: '#3a82f6',
     startIndex: 13,
   },
   yellow: {
     name: 'Yellow',
-    color: '#facc15',
-    accent: 'rgba(250,204,21,0.22)',
+    color: '#f4b731',
     startIndex: 26,
   },
   green: {
     name: 'Green',
-    color: '#22c55e',
-    accent: 'rgba(34,197,94,0.22)',
+    color: '#2ea95f',
     startIndex: 39,
   },
 };
 
-function angleForTrackIndex(index) {
-  return -Math.PI / 2 + (index * Math.PI * 2) / TRACK_COUNT;
+const BOARD_GRID_SIZE = 15;
+const BOARD_MARGIN = 0.05;
+
+const TRACK_CELLS = [
+  { col: 1, row: 6 },
+  { col: 2, row: 6 },
+  { col: 3, row: 6 },
+  { col: 4, row: 6 },
+  { col: 5, row: 6 },
+  { col: 6, row: 5 },
+  { col: 6, row: 4 },
+  { col: 6, row: 3 },
+  { col: 6, row: 2 },
+  { col: 6, row: 1 },
+  { col: 6, row: 0 },
+  { col: 7, row: 0 },
+  { col: 8, row: 0 },
+  { col: 8, row: 1 },
+  { col: 8, row: 2 },
+  { col: 8, row: 3 },
+  { col: 8, row: 4 },
+  { col: 8, row: 5 },
+  { col: 9, row: 6 },
+  { col: 10, row: 6 },
+  { col: 11, row: 6 },
+  { col: 12, row: 6 },
+  { col: 13, row: 6 },
+  { col: 14, row: 6 },
+  { col: 14, row: 7 },
+  { col: 14, row: 8 },
+  { col: 13, row: 8 },
+  { col: 12, row: 8 },
+  { col: 11, row: 8 },
+  { col: 10, row: 8 },
+  { col: 9, row: 8 },
+  { col: 8, row: 9 },
+  { col: 8, row: 10 },
+  { col: 8, row: 11 },
+  { col: 8, row: 12 },
+  { col: 8, row: 13 },
+  { col: 8, row: 14 },
+  { col: 7, row: 14 },
+  { col: 6, row: 14 },
+  { col: 6, row: 13 },
+  { col: 6, row: 12 },
+  { col: 6, row: 11 },
+  { col: 6, row: 10 },
+  { col: 6, row: 9 },
+  { col: 5, row: 8 },
+  { col: 4, row: 8 },
+  { col: 3, row: 8 },
+  { col: 2, row: 8 },
+  { col: 1, row: 8 },
+  { col: 0, row: 8 },
+  { col: 0, row: 7 },
+  { col: 0, row: 6 },
+];
+
+const HOME_PATH_CELLS = {
+  red: [
+    { col: 7, row: 1 },
+    { col: 7, row: 2 },
+    { col: 7, row: 3 },
+    { col: 7, row: 4 },
+    { col: 7, row: 5 },
+    { col: 7, row: 6 },
+  ],
+  blue: [
+    { col: 13, row: 7 },
+    { col: 12, row: 7 },
+    { col: 11, row: 7 },
+    { col: 10, row: 7 },
+    { col: 9, row: 7 },
+    { col: 8, row: 7 },
+  ],
+  yellow: [
+    { col: 7, row: 13 },
+    { col: 7, row: 12 },
+    { col: 7, row: 11 },
+    { col: 7, row: 10 },
+    { col: 7, row: 9 },
+    { col: 7, row: 8 },
+  ],
+  green: [
+    { col: 1, row: 7 },
+    { col: 2, row: 7 },
+    { col: 3, row: 7 },
+    { col: 4, row: 7 },
+    { col: 5, row: 7 },
+    { col: 6, row: 7 },
+  ],
+};
+
+const BASE_TOKEN_CELLS = {
+  red: [
+    { col: 1, row: 1 },
+    { col: 3, row: 1 },
+    { col: 1, row: 3 },
+    { col: 3, row: 3 },
+  ],
+  blue: [
+    { col: 11, row: 1 },
+    { col: 13, row: 1 },
+    { col: 11, row: 3 },
+    { col: 13, row: 3 },
+  ],
+  yellow: [
+    { col: 11, row: 11 },
+    { col: 13, row: 11 },
+    { col: 11, row: 13 },
+    { col: 13, row: 13 },
+  ],
+  green: [
+    { col: 1, row: 11 },
+    { col: 3, row: 11 },
+    { col: 1, row: 13 },
+    { col: 3, row: 13 },
+  ],
+};
+
+const QUADRANT_AREAS = [
+  { id: 'red', color: '#d9504a', startCol: 0, startRow: 0 },
+  { id: 'blue', color: '#3a82f6', startCol: 9, startRow: 0 },
+  { id: 'yellow', color: '#f4b731', startCol: 9, startRow: 9 },
+  { id: 'green', color: '#2ea95f', startCol: 0, startRow: 9 },
+];
+
+const START_INDEX_TO_PLAYER = new Map([
+  [PLAYER_DETAILS.red.startIndex, 'red'],
+  [PLAYER_DETAILS.blue.startIndex, 'blue'],
+  [PLAYER_DETAILS.yellow.startIndex, 'yellow'],
+  [PLAYER_DETAILS.green.startIndex, 'green'],
+]);
+
+function hexToRgb(hex) {
+  const normalized = hex.replace('#', '');
+  const expanded = normalized.length === 3
+    ? normalized.split('').map((char) => char + char).join('')
+    : normalized;
+  const int = parseInt(expanded, 16);
+  return {
+    r: (int >> 16) & 255,
+    g: (int >> 8) & 255,
+    b: int & 255,
+  };
 }
 
-function createQuadrantPoints(center, spacing) {
-  const half = spacing / 2;
-  return [
-    { x: center.x - half, y: center.y - half },
-    { x: center.x + half, y: center.y - half },
-    { x: center.x - half, y: center.y + half },
-    { x: center.x + half, y: center.y + half },
-  ];
+function hexToRgba(hex, alpha = 1) {
+  const { r, g, b } = hexToRgb(hex);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 function detectDevicePixelRatio(canvas) {
@@ -95,52 +229,39 @@ class BoardRenderer {
     detectDevicePixelRatio(this.canvas);
     this.width = rect.width;
     this.height = rect.height;
-    this.center = { x: this.width / 2, y: this.height / 2 };
-    this.trackRadius = Math.min(this.width, this.height) / 2 - 60;
-    this.trackCoords = Array.from({ length: TRACK_COUNT }, (_, idx) => {
-      const angle = angleForTrackIndex(idx);
-      return {
-        x: this.center.x + Math.cos(angle) * this.trackRadius,
-        y: this.center.y + Math.sin(angle) * this.trackRadius,
-      };
-    });
-    this.homeCoords = {};
-    this.goalCoords = {};
-    this.baseCenters = {};
-    const homeStep = 40;
-    const goalRadius = this.trackRadius - (HOME_COUNT + 1) * homeStep;
-    const baseOffset = this.trackRadius + 40;
-    Object.entries(PLAYER_DETAILS).forEach(([id, detail]) => {
-      const startAngle = angleForTrackIndex(detail.startIndex);
-      this.homeCoords[id] = Array.from({ length: HOME_COUNT }, (_, idx) => {
-        const radius = this.trackRadius - (idx + 1) * homeStep;
-        return {
-          x: this.center.x + Math.cos(startAngle) * radius,
-          y: this.center.y + Math.sin(startAngle) * radius,
-        };
-      });
 
-      const goalCenter = {
-        x: this.center.x + Math.cos(startAngle) * goalRadius,
-        y: this.center.y + Math.sin(startAngle) * goalRadius,
-      };
-      this.goalCoords[id] = createQuadrantPoints(goalCenter, 26);
+    this.boardSize = Math.min(this.width, this.height) * (1 - BOARD_MARGIN * 2);
+    this.boardOriginX = (this.width - this.boardSize) / 2;
+    this.boardOriginY = (this.height - this.boardSize) / 2;
+    this.cellSize = this.boardSize / BOARD_GRID_SIZE;
 
-      const baseCenter = {
-        x: this.center.x + Math.cos(startAngle) * baseOffset,
-        y: this.center.y + Math.sin(startAngle) * baseOffset,
-      };
-      this.baseCenters[id] = baseCenter;
-    });
-    this.baseCoords = {};
-    const baseSpacing = 44;
-    Object.entries(this.baseCenters).forEach(([id, center]) => {
-      this.baseCoords[id] = createQuadrantPoints(center, baseSpacing);
-    });
     this.ctx = this.canvas.getContext('2d');
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-    const dprAgain = window.devicePixelRatio || 1;
-    this.ctx.scale(dprAgain, dprAgain);
+    const dpr = window.devicePixelRatio || 1;
+    this.ctx.scale(dpr, dpr);
+
+    const toCenter = (col, row) => ({
+      x: this.boardOriginX + (col + 0.5) * this.cellSize,
+      y: this.boardOriginY + (row + 0.5) * this.cellSize,
+    });
+
+    this.trackCoords = TRACK_CELLS.map(({ col, row }) => toCenter(col, row));
+
+    this.homeCoords = {};
+    Object.entries(HOME_PATH_CELLS).forEach(([id, cells]) => {
+      this.homeCoords[id] = cells.map(({ col, row }) => toCenter(col, row));
+    });
+
+    this.baseCoords = {};
+    Object.entries(BASE_TOKEN_CELLS).forEach(([id, cells]) => {
+      this.baseCoords[id] = cells.map(({ col, row }) => toCenter(col, row));
+    });
+
+    this.centerPoint = toCenter(7, 7);
+    this.playerStartFill = {};
+    Object.entries(PLAYER_DETAILS).forEach(([id, detail]) => {
+      this.playerStartFill[id] = hexToRgba(detail.color, 0.45);
+    });
     this.draw(null, this.context);
   }
 
@@ -159,86 +280,244 @@ class BoardRenderer {
   drawBoardBase() {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.width, this.height);
-    const gradient = ctx.createRadialGradient(
-      this.center.x,
-      this.center.y,
-      40,
-      this.center.x,
-      this.center.y,
-      this.trackRadius + 120,
-    );
-    gradient.addColorStop(0, '#0f172a');
-    gradient.addColorStop(1, '#020617');
-    ctx.fillStyle = gradient;
+
+    const wood = ctx.createLinearGradient(0, 0, 0, this.height);
+    wood.addColorStop(0, '#d5a56b');
+    wood.addColorStop(0.5, '#c79457');
+    wood.addColorStop(1, '#d9ae74');
+    ctx.fillStyle = wood;
     ctx.fillRect(0, 0, this.width, this.height);
 
-    Object.entries(PLAYER_DETAILS).forEach(([id, detail]) => {
-      const baseCenter = this.baseCenters[id];
-      ctx.beginPath();
-      ctx.fillStyle = detail.accent;
-      ctx.arc(baseCenter.x, baseCenter.y, 90, 0, Math.PI * 2);
-      ctx.fill();
+    this.drawRoundedRect(
+      this.boardOriginX,
+      this.boardOriginY,
+      this.boardSize,
+      this.boardSize,
+      this.cellSize * 1.4,
+      '#f5dfb8',
+      '#8b5a2b',
+    );
+
+    QUADRANT_AREAS.forEach((quad) => {
+      this.drawQuadrant(quad);
+      this.drawBasePads(quad.id);
     });
 
-    ctx.lineWidth = 4;
-    Object.entries(PLAYER_DETAILS).forEach(([id, detail]) => {
-      const startCoord = this.trackCoords[detail.startIndex];
-      const homes = this.homeCoords[id];
-      ctx.beginPath();
-      ctx.strokeStyle = detail.color;
-      ctx.moveTo(startCoord.x, startCoord.y);
-      homes.forEach((coord) => ctx.lineTo(coord.x, coord.y));
-      ctx.stroke();
-      homes.forEach((coord, idx) => {
-        ctx.beginPath();
-        ctx.fillStyle = idx === HOME_COUNT - 1 ? detail.color : '#0f172a';
-        ctx.arc(coord.x, coord.y, 14, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = detail.color;
-        ctx.stroke();
-      });
+    TRACK_CELLS.forEach((cell, index) => {
+      this.drawTrackCell(cell, index);
     });
 
-    this.trackCoords.forEach((coord, idx) => {
-      ctx.beginPath();
-      const safe = SAFE_TRACK_POSITIONS.has(idx);
-      if (safe) {
-        const safeGradient = ctx.createRadialGradient(coord.x, coord.y, 4, coord.x, coord.y, 18);
-        safeGradient.addColorStop(0, '#fef9c3');
-        safeGradient.addColorStop(0.6, '#fbbf24');
-        safeGradient.addColorStop(1, '#f59e0b');
-        ctx.fillStyle = safeGradient;
-      } else {
-        ctx.fillStyle = '#1e293b';
-      }
-      ctx.arc(coord.x, coord.y, 18, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = safe ? '#f97316' : '#0f172a';
-      ctx.stroke();
-      if (safe) {
-        drawStar(ctx, coord.x, coord.y, 5, 10, 4.5, '#fefce8', '#fbbf24');
-      }
+    Object.keys(HOME_PATH_CELLS).forEach((playerId) => {
+      this.drawHomePath(playerId);
     });
+
+    this.drawCenterArea();
 
     if (this.context.currentPlayerId && PLAYER_DETAILS[this.context.currentPlayerId]) {
       const startIdx = PLAYER_DETAILS[this.context.currentPlayerId].startIndex;
-      const highlightCoord = this.trackCoords[startIdx];
-      ctx.beginPath();
-      ctx.strokeStyle = PLAYER_DETAILS[this.context.currentPlayerId].color;
-      ctx.lineWidth = 5;
-      ctx.arc(highlightCoord.x, highlightCoord.y, 26, 0, Math.PI * 2);
+      const cell = TRACK_CELLS[startIdx];
+      const { x, y, size } = this.cellRect(cell.col, cell.row, this.cellSize * 0.02);
+      ctx.save();
+      ctx.lineWidth = Math.max(2.4, this.cellSize * 0.12);
+      ctx.strokeStyle = hexToRgba(PLAYER_DETAILS[this.context.currentPlayerId].color, 0.9);
+      ctx.strokeRect(x, y, size, size);
+      ctx.restore();
+    }
+  }
+
+  cellCenter(col, row) {
+    return {
+      x: this.boardOriginX + (col + 0.5) * this.cellSize,
+      y: this.boardOriginY + (row + 0.5) * this.cellSize,
+    };
+  }
+
+  cellRect(col, row, padding = 0) {
+    const size = this.cellSize - padding * 2;
+    return {
+      x: this.boardOriginX + col * this.cellSize + padding,
+      y: this.boardOriginY + row * this.cellSize + padding,
+      size,
+    };
+  }
+
+  drawRoundedRect(x, y, width, height, radius, fillStyle, strokeStyle) {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+    ctx.fillStyle = fillStyle;
+    ctx.fill();
+    if (strokeStyle) {
+      ctx.strokeStyle = strokeStyle;
+      ctx.lineWidth = Math.max(2, this.cellSize * 0.08);
       ctx.stroke();
     }
+    ctx.restore();
+  }
+
+  drawQuadrant(quad) {
+    const ctx = this.ctx;
+    const x = this.boardOriginX + quad.startCol * this.cellSize;
+    const y = this.boardOriginY + quad.startRow * this.cellSize;
+    const size = this.cellSize * 6;
+    const radius = this.cellSize * 1.6;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + size - radius, y);
+    ctx.quadraticCurveTo(x + size, y, x + size, y + radius);
+    ctx.lineTo(x + size, y + size - radius);
+    ctx.quadraticCurveTo(x + size, y + size, x + size - radius, y + size);
+    ctx.lineTo(x + radius, y + size);
+    ctx.quadraticCurveTo(x, y + size, x, y + size - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+    ctx.fillStyle = hexToRgba(quad.color, 0.92);
+    ctx.fill();
+    ctx.lineWidth = Math.max(2, this.cellSize * 0.08);
+    ctx.strokeStyle = hexToRgba(quad.color, 0.55);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  drawBasePads(playerId) {
+    const ctx = this.ctx;
+    const color = PLAYER_DETAILS[playerId].color;
+    const padding = this.cellSize * 0.1;
+    BASE_TOKEN_CELLS[playerId].forEach(({ col, row }) => {
+      const { x, y, size } = this.cellRect(col, row, padding);
+      const center = this.cellCenter(col, row);
+      const radius = size * 0.45;
+      ctx.save();
+      ctx.beginPath();
+      ctx.fillStyle = hexToRgba(color, 0.35);
+      ctx.strokeStyle = hexToRgba(color, 0.65);
+      ctx.lineWidth = Math.max(1.5, this.cellSize * 0.07);
+      ctx.shadowColor = hexToRgba(color, 0.25);
+      ctx.shadowBlur = radius * 0.4;
+      ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    });
+  }
+
+  drawTrackCell(cell, index) {
+    const ctx = this.ctx;
+    const { x, y, size } = this.cellRect(cell.col, cell.row, this.cellSize * 0.08);
+    const playerId = START_INDEX_TO_PLAYER.get(index);
+    ctx.save();
+    ctx.fillStyle = playerId ? this.playerStartFill[playerId] : '#f8e7c8';
+    ctx.fillRect(x, y, size, size);
+    ctx.lineWidth = Math.max(1.5, this.cellSize * 0.05);
+    ctx.strokeStyle = '#b98a5a';
+    ctx.strokeRect(x, y, size, size);
+    if (SAFE_TRACK_POSITIONS.has(index)) {
+      this.drawSafeMarker(x + size / 2, y + size / 2, size * 0.45);
+    }
+    ctx.restore();
+  }
+
+  drawHomePath(playerId) {
+    const ctx = this.ctx;
+    const color = PLAYER_DETAILS[playerId].color;
+    const cells = HOME_PATH_CELLS[playerId];
+    cells.forEach(({ col, row }, idx) => {
+      const { x, y, size } = this.cellRect(col, row, this.cellSize * 0.08);
+      const alpha = idx === HOME_COUNT - 1 ? 0.9 : 0.55;
+      ctx.save();
+      ctx.fillStyle = hexToRgba(color, alpha);
+      ctx.fillRect(x, y, size, size);
+      ctx.lineWidth = Math.max(1.5, this.cellSize * 0.05);
+      ctx.strokeStyle = hexToRgba(color, 0.8);
+      ctx.strokeRect(x, y, size, size);
+      ctx.restore();
+    });
+  }
+
+  drawCenterArea() {
+    const ctx = this.ctx;
+    const centerCells = [
+      { col: 6, row: 6 },
+      { col: 7, row: 6 },
+      { col: 8, row: 6 },
+      { col: 6, row: 7 },
+      { col: 7, row: 7 },
+      { col: 8, row: 7 },
+      { col: 6, row: 8 },
+      { col: 7, row: 8 },
+      { col: 8, row: 8 },
+    ];
+
+    centerCells.forEach(({ col, row }) => {
+      const { x, y, size } = this.cellRect(col, row, this.cellSize * 0.08);
+      ctx.fillStyle = '#f9ead0';
+      ctx.fillRect(x, y, size, size);
+      ctx.lineWidth = Math.max(1.2, this.cellSize * 0.04);
+      ctx.strokeStyle = '#c79b62';
+      ctx.strokeRect(x, y, size, size);
+    });
+
+    const center = this.cellCenter(7, 7);
+    const radius = this.cellSize * 0.9;
+
+    const wedge = (angle, color) => {
+      ctx.beginPath();
+      ctx.moveTo(center.x, center.y);
+      ctx.lineTo(
+        center.x + Math.cos(angle - Math.PI / 4) * radius,
+        center.y + Math.sin(angle - Math.PI / 4) * radius,
+      );
+      ctx.lineTo(
+        center.x + Math.cos(angle + Math.PI / 4) * radius,
+        center.y + Math.sin(angle + Math.PI / 4) * radius,
+      );
+      ctx.closePath();
+      ctx.fillStyle = hexToRgba(color, 0.45);
+      ctx.fill();
+    };
+
+    wedge(-Math.PI / 2, PLAYER_DETAILS.red.color);
+    wedge(0, PLAYER_DETAILS.blue.color);
+    wedge(Math.PI / 2, PLAYER_DETAILS.yellow.color);
+    wedge(Math.PI, PLAYER_DETAILS.green.color);
 
     ctx.beginPath();
-    ctx.fillStyle = '#1e293b';
-    ctx.arc(this.center.x, this.center.y, 74, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = Math.max(1.2, this.cellSize * 0.04);
+    ctx.strokeStyle = '#b98a5a';
+    ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
     ctx.stroke();
+  }
+
+  drawSafeMarker(cx, cy, radius) {
+    drawStar(this.ctx, cx, cy, 5, radius, radius * 0.5, '#fce28a', '#c27a2b');
+  }
+
+  getGoalPoint(playerId, slot) {
+    const baseAngles = {
+      red: -Math.PI / 2,
+      blue: 0,
+      yellow: Math.PI / 2,
+      green: Math.PI,
+    };
+    const angle = (baseAngles[playerId] ?? 0) + ((slot % 4) * Math.PI) / 2;
+    const radius = this.cellSize * 0.6;
+    return {
+      x: this.centerPoint.x + Math.cos(angle) * radius,
+      y: this.centerPoint.y + Math.sin(angle) * radius,
+    };
   }
 
   drawTokens(state) {
@@ -279,17 +558,17 @@ class BoardRenderer {
           entry.basePoint = this.homeCoords[playerId]?.[entry.positionIndex] || null;
         } else if (entry.positionType === 'goal') {
           const goalSlot = finishedTracker[playerId] ?? 0;
-          entry.basePoint = this.goalCoords[playerId]?.[goalSlot] || this.center;
-          finishedTracker[playerId] = goalSlot + 1;
-        } else if (entry.positionType === 'base' || entry.status === 'base') {
-          entry.basePoint = this.baseCoords[playerId]?.[index] || null;
-          entry.positionType = 'base';
-        }
+        entry.basePoint = this.getGoalPoint(playerId, goalSlot);
+        finishedTracker[playerId] = goalSlot + 1;
+      } else if (entry.positionType === 'base' || entry.status === 'base') {
+        entry.basePoint = this.baseCoords[playerId]?.[index] || null;
+        entry.positionType = 'base';
+      }
 
-        if (!entry.basePoint) {
-          entry.basePoint = this.center;
-        }
-        entries.push(entry);
+      if (!entry.basePoint) {
+        entry.basePoint = this.centerPoint;
+      }
+      entries.push(entry);
       });
     });
 
@@ -325,9 +604,9 @@ class BoardRenderer {
 
   drawToken(x, y, entry) {
     const ctx = this.ctx;
-    const outerRadius = 18;
-    const innerRadius = 12;
-    const coreRadius = 7;
+    const outerRadius = Math.min(this.cellSize * 0.32, 22);
+    const innerRadius = outerRadius * 0.65;
+    const coreRadius = outerRadius * 0.4;
 
     ctx.save();
     if (entry.highlight) {
@@ -358,7 +637,7 @@ class BoardRenderer {
     this.hitRegions.push({
       x,
       y,
-      radius: outerRadius + 4,
+      radius: outerRadius + 6,
       playerId: entry.playerId,
       tokenIndex: entry.tokenIndex,
       highlight: entry.highlight,
@@ -369,7 +648,7 @@ class BoardRenderer {
     if (count <= 1) {
       return [{ x: 0, y: 0 }];
     }
-    const radius = count <= 3 ? 14 : 18;
+    const radius = this.cellSize * (count <= 3 ? 0.22 : 0.28);
     return Array.from({ length: count }, (_, idx) => {
       const angle = (idx / count) * Math.PI * 2;
       return {
@@ -994,7 +1273,9 @@ function updateControls() {
     return;
   }
 
-  const isHost = game?.players?.[0]?.id === state.player.id;
+  const isHost = Boolean(
+    game?.players?.find((player) => player.id === state.player.id)?.isHost,
+  );
   const availableSeats = Math.max(0, game?.availableSeats ?? 0);
   if (aiControls) {
     const showAiControls = Boolean(isHost);
@@ -1077,6 +1358,7 @@ function updateControls() {
 
 function renderGame() {
   const game = state.game;
+  roomCode.textContent = state.roomId || '—';
   if (!game) {
     renderer.draw(null, {
       currentPlayerId: state.player?.id ?? null,
