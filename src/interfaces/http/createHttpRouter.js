@@ -1,19 +1,42 @@
-const path = require('path');
 const express = require('express');
 const { OAuth2Client } = require('google-auth-library');
 
-function registerHttpEndpoints(app, { googleClientId, profileRepository, sessionStore }) {
+/**
+ * @typedef {Object} HttpRouteDependencies
+ * @property {string | null} googleClientId
+ * @property {string | null} [socketUrl]
+ * @property {{
+ *   ensureProfile: (payload: {
+ *     googleSub: string,
+ *     email?: string,
+ *     name?: string,
+ *     picture?: string,
+ *   }) => Promise<any>,
+ *   findById: (id: string) => Promise<any>,
+ *   recordGameResult?: (profileId: string, result: { won: boolean }) => Promise<void>,
+ * }} profileRepository
+ * @property {{
+ *   createSession: (profile: any) => string,
+ *   getSession: (token: string) => { profileId: string } | null,
+ *   revokeSession: (token: string) => void,
+ * }} sessionStore
+ */
+
+/**
+ * Creates the HTTP router exposing auth endpoints and diagnostics.
+ * @param {HttpRouteDependencies} dependencies
+ * @returns {import('express').Router}
+ */
+function createHttpRouter({ googleClientId, socketUrl = null, profileRepository, sessionStore }) {
+  const router = express.Router();
   const oauthClient = googleClientId ? new OAuth2Client(googleClientId) : null;
 
-  app.use(express.json({ limit: '1mb' }));
-  app.use(express.static(path.join(__dirname, '..', '..', '..', 'public')));
-
-  app.get('/health', (req, res) => {
+  router.get('/health', (req, res) => {
     res.json({ ok: true, uptime: process.uptime() });
   });
 
-  app.get('/config', (req, res) => {
-    res.json({ googleClientId: googleClientId || null });
+  router.get('/config', (req, res) => {
+    res.json({ googleClientId: googleClientId || null, socketUrl: socketUrl || null });
   });
 
   async function verifyGoogleCredential(credential) {
@@ -44,7 +67,7 @@ function registerHttpEndpoints(app, { googleClientId, profileRepository, session
     return { token, session };
   }
 
-  app.post('/auth/google', async (req, res) => {
+  router.post('/auth/google', async (req, res) => {
     try {
       if (!oauthClient) {
         res.status(500).json({ error: 'Google sign-in is not configured' });
@@ -88,7 +111,7 @@ function registerHttpEndpoints(app, { googleClientId, profileRepository, session
     }
   });
 
-  app.post('/auth/logout', (req, res) => {
+  router.post('/auth/logout', (req, res) => {
     const { token } = req.body || {};
     if (token) {
       sessionStore.revokeSession(token);
@@ -96,7 +119,7 @@ function registerHttpEndpoints(app, { googleClientId, profileRepository, session
     res.json({ ok: true });
   });
 
-  app.get('/auth/session', async (req, res) => {
+  router.get('/auth/session', async (req, res) => {
     const result = resolveSession(req);
     if (!result) {
       res.status(401).json({ error: 'Invalid session' });
@@ -122,8 +145,12 @@ function registerHttpEndpoints(app, { googleClientId, profileRepository, session
       },
     });
   });
+
+  return router;
 }
 
 module.exports = {
-  registerHttpEndpoints,
+  createHttpRouter,
+  /** @type {HttpRouteDependencies | undefined} */
+  HttpRouteDependencies: undefined,
 };
