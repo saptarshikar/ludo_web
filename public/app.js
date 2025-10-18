@@ -671,7 +671,8 @@ class BoardRenderer {
   }
 }
 
-const socket = io();
+let socket = null;
+let socketConfiguredUrl = null;
 
 const SESSION_STORAGE_KEY = 'ludo_session_token';
 
@@ -687,6 +688,7 @@ const state = {
   },
   config: {
     googleClientId: null,
+    socketUrl: null,
   },
   ui: {
     lastDiceRollTimestamp: null,
@@ -1147,6 +1149,8 @@ async function loadAuthConfig() {
   try {
     const config = await fetchJSON('/config');
     state.config.googleClientId = config?.googleClientId || null;
+    state.config.socketUrl = config?.socketUrl || null;
+    initializeSocketConnection(state.config.socketUrl);
     if (state.config.googleClientId) {
       initializeGoogleSignIn(state.config.googleClientId);
     } else {
@@ -1154,6 +1158,8 @@ async function loadAuthConfig() {
       updateAuthUI();
     }
   } catch (error) {
+    state.config.socketUrl = null;
+    initializeSocketConnection(null);
     state.auth.ready = true;
     setAuthMessage(error.message || 'Failed to load sign-in configuration.');
     updateAuthUI();
@@ -1415,6 +1421,14 @@ function renderGame() {
   });
 }
 
+function getActiveSocket() {
+  if (!socket) {
+    statusMessage.textContent = 'Connecting to game server...';
+    return null;
+  }
+  return socket;
+}
+
 function emitJoin(roomId, name) {
   if (!state.auth.sessionToken) {
     if (state.auth.mode !== 'guest') {
@@ -1422,7 +1436,11 @@ function emitJoin(roomId, name) {
       return;
     }
   }
-  socket.emit(
+  const activeSocket = getActiveSocket();
+  if (!activeSocket) {
+    return;
+  }
+  activeSocket.emit(
     'joinRoom',
     {
       roomId,
@@ -1449,7 +1467,11 @@ function emitJoin(roomId, name) {
 }
 
 function requestMove(tokenIndex) {
-  socket.emit('moveToken', { tokenIndex }, (response) => {
+  const activeSocket = getActiveSocket();
+  if (!activeSocket) {
+    return;
+  }
+  activeSocket.emit('moveToken', { tokenIndex }, (response) => {
     if (response?.error) {
       statusMessage.textContent = response.error;
     }
@@ -1484,7 +1506,11 @@ randomRoomBtn.addEventListener('click', () => {
 });
 
 startBtn.addEventListener('click', () => {
-  socket.emit('startGame', (response) => {
+  const activeSocket = getActiveSocket();
+  if (!activeSocket) {
+    return;
+  }
+  activeSocket.emit('startGame', (response) => {
     if (response?.error) {
       statusMessage.textContent = response.error;
     }
@@ -1492,7 +1518,11 @@ startBtn.addEventListener('click', () => {
 });
 
 rollBtn.addEventListener('click', () => {
-  socket.emit('rollDice', (response) => {
+  const activeSocket = getActiveSocket();
+  if (!activeSocket) {
+    return;
+  }
+  activeSocket.emit('rollDice', (response) => {
     if (response?.error) {
       statusMessage.textContent = response.error;
     }
@@ -1536,7 +1566,11 @@ if (addAiBtn) {
       return;
     }
     const difficulty = aiDifficultySelect?.value ?? 'easy';
-    socket.emit('addAiPlayer', { difficulty }, (response) => {
+    const activeSocket = getActiveSocket();
+    if (!activeSocket) {
+      return;
+    }
+    activeSocket.emit('addAiPlayer', { difficulty }, (response) => {
       if (response?.error) {
         statusMessage.textContent = response.error;
       }
@@ -1549,7 +1583,11 @@ if (debugWinBtn) {
     if (debugWinBtn.disabled) {
       return;
     }
-    socket.emit('debugEndGame', (response = {}) => {
+    const activeSocket = getActiveSocket();
+    if (!activeSocket) {
+      return;
+    }
+    activeSocket.emit('debugEndGame', (response = {}) => {
       if (response.error) {
         statusMessage.textContent = response.error;
       }
@@ -1599,7 +1637,7 @@ boardCanvas.addEventListener('click', (event) => {
   requestMove(hit.tokenIndex);
 });
 
-socket.on('roomUpdate', (payload) => {
+function handleRoomUpdate(payload) {
   if (!payload) {
     return;
   }
@@ -1608,9 +1646,9 @@ socket.on('roomUpdate', (payload) => {
   }
   state.roomId = payload.roomId || state.roomId;
   renderGame();
-});
+}
 
-socket.on('gameState', (gameState) => {
+function handleGameState(gameState) {
   state.game = gameState;
   if (state.player) {
     const updatedSelf = gameState.players?.find((p) => p.id === state.player.id);
@@ -1645,23 +1683,56 @@ socket.on('gameState', (gameState) => {
   }
   updateAuthUI();
   renderGame();
-});
+}
 
-socket.on('disconnect', () => {
+function handleSocketDisconnect() {
   statusMessage.textContent = 'Connection lost. Attempting to reconnect...';
-});
+}
 
-socket.io.on('reconnect', () => {
+function handleSocketReconnect() {
   statusMessage.textContent = 'Reconnected.';
   if (state.roomId && state.player) {
-    socket.emit('requestState', (response) => {
+    const activeSocket = getActiveSocket();
+    if (!activeSocket) {
+      return;
+    }
+    activeSocket.emit('requestState', (response) => {
       if (response?.ok) {
         state.game = response.state;
         renderGame();
       }
     });
   }
-});
+}
+
+function bindSocketEvents(instance) {
+  instance.on('connect', () => {
+    statusMessage.textContent = '';
+  });
+  instance.on('connect_error', (error) => {
+    statusMessage.textContent = error?.message || 'Failed to connect to game server.';
+  });
+  instance.on('roomUpdate', handleRoomUpdate);
+  instance.on('gameState', handleGameState);
+  instance.on('disconnect', handleSocketDisconnect);
+  instance.io.on('reconnect', handleSocketReconnect);
+}
+
+function initializeSocketConnection(socketUrl) {
+  const targetUrl = socketUrl || null;
+  if (socket) {
+    if (socketConfiguredUrl === targetUrl) {
+      return socket;
+    }
+    socket.disconnect();
+  }
+  socketConfiguredUrl = targetUrl;
+  const instance = socketConfiguredUrl ? io(socketConfiguredUrl) : io();
+  socket = instance;
+  statusMessage.textContent = 'Connecting to game server...';
+  bindSocketEvents(instance);
+  return instance;
+}
 
 updateAuthUI();
 restoreSession();
