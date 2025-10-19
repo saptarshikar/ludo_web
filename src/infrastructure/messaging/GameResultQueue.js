@@ -3,10 +3,11 @@ const { randomUUID } = require('crypto');
 
 const DEFAULT_ATTEMPTS = 5;
 const DEFAULT_BACKOFF_DELAY = 1000;
+const MAX_BACKOFF_DELAY = 30000;
 
 function exponentialBackoff(attempt, baseDelay = DEFAULT_BACKOFF_DELAY) {
   const exponent = Math.max(attempt - 1, 0);
-  return Math.min(baseDelay * 2 ** exponent, 30000);
+  return Math.min(baseDelay * 2 ** exponent, MAX_BACKOFF_DELAY);
 }
 
 class GameResultQueue extends EventEmitter {
