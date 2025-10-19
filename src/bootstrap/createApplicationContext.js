@@ -4,6 +4,8 @@ const { RoomRegistry } = require('../infrastructure/rooms/RoomRegistry');
 const { InMemoryRoomStore } = require('../infrastructure/rooms/InMemoryRoomStore');
 const { RedisRoomStore } = require('../infrastructure/rooms/RedisRoomStore');
 const { GameCoordinator } = require('../application/services/GameCoordinator');
+const { GameResultQueue } = require('../infrastructure/messaging/GameResultQueue');
+const { GameResultProducer } = require('../infrastructure/messaging/GameResultProducer');
 
 /**
  * Constructs application-level dependencies shared across services.
@@ -11,6 +13,10 @@ const { GameCoordinator } = require('../application/services/GameCoordinator');
  *   redis?: {
  *     client?: import('redis').RedisClientType,
  *     logger?: (error: Error) => void,
+ *   },
+ *   messaging?: {
+ *     gameResultQueue?: import('../infrastructure/messaging/GameResultQueue').GameResultQueue,
+ *     gameResultProducer?: import('../infrastructure/messaging/GameResultProducer').GameResultProducer,
  *   },
  * }} [options]
  * @returns {{
@@ -21,16 +27,21 @@ const { GameCoordinator } = require('../application/services/GameCoordinator');
  * }}
  */
 function createApplicationContext(options = {}) {
-  const { redis } = options;
+  const { redis, messaging } = options;
   const profileRepository = new MySqlProfileRepository();
   const sessionStore = new InMemorySessionStore();
   const roomRegistry = new RoomRegistry({ storageAdapter: createRoomStore(redis) });
-  const coordinator = new GameCoordinator({ roomRegistry, profileRepository });
+  const gameResultQueue = messaging?.gameResultQueue || new GameResultQueue();
+  const resultPublisher =
+    messaging?.gameResultProducer || new GameResultProducer({ queue: gameResultQueue });
+  const coordinator = new GameCoordinator({ roomRegistry, profileRepository, resultPublisher });
 
   return {
     profileRepository,
     sessionStore,
     roomRegistry,
+    gameResultQueue,
+    resultPublisher,
     coordinator,
   };
 }

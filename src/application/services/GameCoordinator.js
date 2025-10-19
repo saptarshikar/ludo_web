@@ -1,4 +1,5 @@
 const { SAFE_TRACK_POSITIONS, FINISH_STEP } = require('../../domain/constants');
+const { createGameResultRecordedEvent } = require('../../domain/events/GameResultRecorded');
 
 const MAX_AI_ITERATIONS = 40;
 
@@ -112,9 +113,10 @@ function selectAiMove(game, player, moves) {
  * @implements {import('../../domain/contracts/GameCoordinator').GameCoordinator}
  */
 class GameCoordinator {
-  constructor({ roomRegistry, profileRepository }) {
+  constructor({ roomRegistry, profileRepository, resultPublisher }) {
     this.roomRegistry = roomRegistry;
     this.profileRepository = profileRepository;
+    this.resultPublisher = resultPublisher || null;
   }
 
   getRoomOrFail(roomId) {
@@ -133,8 +135,34 @@ class GameCoordinator {
     if (!results) {
       return;
     }
-    const { winnerId } = results;
-    for (const participant of results.participants) {
+    const basePayload = {
+      roomId: room.id,
+      winnerPlayerId: results.winnerId,
+      turnId: results.turnId,
+      timestamp: results.completedAt,
+      participants: results.participants.map((participant) => ({
+        playerId: participant.playerId,
+        profileId: participant.profileId || null,
+        score: participant.playerId === results.winnerId ? 1 : 0,
+      })),
+    };
+
+    if (this.resultPublisher && typeof this.resultPublisher.publishGameResult === 'function') {
+      try {
+        await this.resultPublisher.publishGameResult(basePayload);
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error('Failed to enqueue game result', error);
+      }
+      return;
+    }
+
+    if (!this.profileRepository || typeof this.profileRepository.recordGameResult !== 'function') {
+      return;
+    }
+
+    const event = createGameResultRecordedEvent(basePayload);
+    for (const participant of event.payload.participants) {
       if (!participant.profileId) {
         // guest or AI – skip persistence
         // eslint-disable-next-line no-continue
@@ -142,7 +170,7 @@ class GameCoordinator {
       }
       try {
         await this.profileRepository.recordGameResult(participant.profileId, {
-          won: winnerId === participant.playerId,
+          won: participant.score > 0,
         });
       } catch (error) {
         // eslint-disable-next-line no-console
