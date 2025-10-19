@@ -55,14 +55,16 @@ function createPersistenceWorker({ queue, profileRepository, gameRepository, log
     await processor(job.payload, job);
   });
 
+  const getIdempotencyKey = (job) => job && job.payload ? job.payload.idempotencyKey : undefined;
+
   const retryHandler = (job, error, delay) => {
     if (logger) {
-      logger({ type: 'retrying', idempotencyKey: job.payload.idempotencyKey, delay, error });
+      logger({ type: 'retrying', idempotencyKey: getIdempotencyKey(job), delay, error });
     }
   };
   const failedHandler = (job, error) => {
     if (logger) {
-      logger({ type: 'failed', idempotencyKey: job.payload.idempotencyKey, error });
+      logger({ type: 'failed', idempotencyKey: getIdempotencyKey(job), error });
     }
   };
 
