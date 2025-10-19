@@ -28,3 +28,50 @@
 - Socket membership is the glue between services: joins call `setSocketRoom`, and disconnections rely on `removeSocket` to eject players and prune empty rooms. Any Redis-backed registry must atomically update both the room roster and socket index to preserve this invariant. 【F:src/application/services/GameCoordinator.js†L108-L125】【F:src/application/services/GameCoordinator.js†L154-L170】【F:src/infrastructure/rooms/RoomRegistry.js†L21-L40】
 - Game conclusion handling assumes `pendingResults` survives until `persistPendingResults` consumes it; external storage should keep participant lists and winner ids side-by-side with room lifecycle timestamps. 【F:src/application/services/GameCoordinator.js†L84-L117】【F:src/domain/entities/LudoGame.js†L286-L324】
 - Automated turns mutate the same `turnState` and history objects as human moves (`rollDice`, `moveToken`, `advanceTurn`), so remote executors must serialize dice rolls, move resolutions, and resulting turn index changes exactly once to avoid divergent state. 【F:src/application/services/GameCoordinator.js†L175-L214】【F:src/domain/entities/LudoGame.js†L163-L311】
+
+## Redis-backed distributed room schema
+
+### Core keys
+
+| Key | Type | Contents | Notes |
+| --- | ---- | -------- | ----- |
+| `room:{roomId}` | Hash | Canonical metadata (`id`, `phase`, `turnIndex`, `currentPlayerId`, `winnerId`, `createdAt`, `updatedAt`) | All values stored as strings; `turnIndex` and timestamps are numeric strings. |
+| `room:{roomId}:members` | Hash | `playerId -> JSON` describing socket id, profile, seat index, and token summary | Used to rebuild in-memory `players`, `playerTokens`, and `playerPaths`. |
+| `room:{roomId}:turn_queue` | Sorted Set | Member: `playerId`, Score: turn order index | Allows atomic `ZPOPMIN`/`ZADD` to rotate turns and skip removed players. |
+| `room:{roomId}:events` | List | JSON-encoded command/event records (roll, move, capture, victory) | Acts as durable history for coordinator replay or reconciliation. |
+| `socket_room` | Hash | `socketId -> roomId` | Enables quick lookup for disconnect handling across instances. |
+| `room_index` | Sorted Set | Member: `roomId`, Score: `updatedAt` | Supports dashboards and idle eviction scans. |
+
+All room identifiers are stored in lowercase to match the `RoomRegistry` invariant. Complex entities (player profiles, token arrays, turn state details) should be JSON encoded inside hashes to keep the Redis schema compact while still letting coordinators fetch a single key when rehydrating room state.
+
+### Command and event lifecycle
+
+1. **Room creation**
+   - Coordinator performs `HSETNX room:{roomId}` with metadata and initializes `room_index` and `turn_queue` in a transaction (`MULTI/EXEC` or Lua) to guarantee a single creator wins.
+   - `events` list is optionally seeded with a `room_created` record for audit trails.
+2. **Player join**
+   - Coordinator adds an entry to `room:{roomId}:members` (JSON payload containing socket id, avatar, tokens) and inserts the player into `turn_queue` using `ZADD` with the next seat order.
+   - `socket_room` is updated atomically in the same transaction to avoid orphaned sockets if a crash occurs mid-join.
+   - A `player_joined` event is pushed to `events` for downstream consumers.
+3. **Player leave / disconnect**
+   - On explicit leave or socket timeout, coordinator removes the player from `members`, deletes their mapping from `socket_room`, and removes them from `turn_queue` via `ZREM`.
+   - If the room empties, metadata `phase` becomes `finished` and cleanup is triggered (see below).
+   - A `player_left` event is appended; consumers use this to cancel pending commands.
+4. **Turn advancement**
+   - `turn_queue` maintains the authoritative order. Dice roll commands atomically fetch `ZPOPMIN`, process the move, and push the player back with incremented index (modulo player count).
+   - `room:{roomId}` hash updates `turnIndex`, `currentPlayerId`, and any `turnState` JSON snapshot in the same transaction to keep state cohesive.
+   - Roll, move, capture, or skip outcomes are appended to `events` with sufficient payload for idempotent replay (dice value, token id, resulting positions).
+5. **Result submission**
+   - Once a player finishes, their token statuses in `members` and the `winnerId` / `pendingResults` fields in `room:{roomId}` are updated. A `game_finished` event is added for the profile persistence worker.
+   - Coordinators should also flag `phase = finished` when all outcomes are recorded, so other services stop scheduling turns.
+6. **Cleanup**
+   - After persisting results or if the room becomes empty, `DEL` the room-specific keys (`room:{roomId}`, `:members`, `:turn_queue`, `:events`) and remove the entry from `room_index` and `socket_room`.
+   - Cleanup transactions should be conditional (`WATCH room:{roomId}`) to avoid deleting rooms that just received a new join.
+
+### Expiry and reconciliation
+
+- **Idle expiry**: attach a TTL to `room:{roomId}` and related keys when the room enters `waiting` with zero players, refreshing the TTL on each join or turn update. A background job scans `room_index` by `updatedAt` to identify rooms whose `updatedAt` is older than the configured idle threshold, issuing cleanup commands.
+- **Coordinator reconciliation**: consumers replay the `events` list to reconstruct state when taking over after a crash. Each command handler should be idempotent by referencing event identifiers or by checking `turnState` hashes before applying mutations. If divergence is detected (e.g., missing member in `members` hash when handling a move), the coordinator logs the issue, rehydrates from authoritative player data, and rewrites the member hash before proceeding.
+- **Socket mismatch handling**: when `socket_room` references a room that no longer exists, the consumer deletes the mapping and emits a `player_left` event to keep downstream services consistent.
+
+This schema ensures any coordinator instance can atomically mutate room state, replay game history, and evict stale rooms without relying on in-memory singletons.
