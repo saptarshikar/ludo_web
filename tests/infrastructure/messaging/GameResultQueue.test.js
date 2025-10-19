@@ -1,3 +1,4 @@
+const { once } = require('events');
 const { GameResultQueue } = require('../../../src/infrastructure/messaging/GameResultQueue');
 
 describe('GameResultQueue', () => {
@@ -17,15 +18,13 @@ describe('GameResultQueue', () => {
     await queue.add({ id: 'first' });
     await queue.add({ id: 'second' });
 
-    const flushImmediate = () => new Promise((resolve) => setImmediate(resolve));
-
-    await flushImmediate();
-    await flushImmediate();
-
+    await once(queue, 'retrying');
     expect(processedOrder).toEqual(['first']);
 
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await once(queue, 'completed');
+    expect(processedOrder).toEqual(['first', 'first']);
 
+    await once(queue, 'completed');
     expect(processedOrder).toEqual(['first', 'first', 'second']);
   });
 });

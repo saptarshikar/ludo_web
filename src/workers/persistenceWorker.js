@@ -52,7 +52,7 @@ function createPersistenceWorker({ queue, profileRepository, gameRepository, log
   const processor = createPersistenceProcessor({ profileRepository, gameRepository, logger });
 
   const unsubscribe = queue.subscribe(async (job) => {
-    await processor(job.payload, job);
+    await processor(job.payload);
   });
 
   const getIdempotencyKey = (job) => job && job.payload ? job.payload.idempotencyKey : undefined;
