@@ -15,6 +15,8 @@ class RedisRoomStore {
     this.socketRoomKey = options.socketRoomKey || 'socket_to_room';
     this.roomTtlSeconds = options.roomTtlSeconds || DEFAULT_ROOM_TTL_SECONDS;
     this.logger = typeof options.logger === 'function' ? options.logger : null;
+    this.gameFactory =
+      typeof options.gameFactory === 'function' ? options.gameFactory : (roomId) => new LudoGame(roomId);
     this.gameTargets = new WeakMap();
     this.targetToProxy = new WeakMap();
     this.pendingWrites = new Set();
@@ -71,7 +73,7 @@ class RedisRoomStore {
       throw new Error('roomId is required');
     }
     if (!this.rooms.has(normalized)) {
-      const game = new LudoGame(normalized);
+      const game = this.gameFactory(normalized);
       const room = {
         id: normalized,
         game: this.ensureProxiedGame(normalized, game),
