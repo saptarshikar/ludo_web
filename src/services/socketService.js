@@ -3,6 +3,7 @@ const { createApplicationContext } = require('../bootstrap/createApplicationCont
 const { createGameSocketServer } = require('../interfaces/socket/createGameSocketServer');
 const { loadEnvironmentConfig } = require('../bootstrap/loadEnvironmentConfig');
 const { createRedisManager } = require('../bootstrap/createRedisManager');
+const { createGracefulShutdown } = require('../bootstrap/createGracefulShutdown');
 
 const config = loadEnvironmentConfig(process.env);
 const logger = console;
@@ -45,19 +46,12 @@ async function startSocketService() {
     profileRepository,
   });
 
-  const shutdown = async (signal) => {
-    if (logger?.info) {
-      logger.info(`Received ${signal}. Shutting down Socket service.`);
-    }
-    await new Promise((resolve) => server.close(resolve));
-    await roomRegistry.waitForPersistence();
-    await redisManager.disconnect();
-    process.exit(0);
-  };
-
-  ['SIGINT', 'SIGTERM'].forEach((signal) => {
-    process.once(signal, () => shutdown(signal));
-  });
+  createGracefulShutdown(server, {
+    roomRegistry,
+    redisManager,
+    logger,
+    serviceName: 'Socket service',
+  }).register();
 
   server.listen(config.socketPort, () => {
     if (logger?.info) {

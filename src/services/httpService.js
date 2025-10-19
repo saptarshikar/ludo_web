@@ -3,6 +3,7 @@ const { createApplicationContext } = require('../bootstrap/createApplicationCont
 const { createHttpApp } = require('../interfaces/http/createHttpApp');
 const { loadEnvironmentConfig } = require('../bootstrap/loadEnvironmentConfig');
 const { createRedisManager } = require('../bootstrap/createRedisManager');
+const { createGracefulShutdown } = require('../bootstrap/createGracefulShutdown');
 
 const config = loadEnvironmentConfig(process.env);
 const logger = console;
@@ -38,19 +39,12 @@ async function startHttpService() {
 
   const server = http.createServer(app);
 
-  const shutdown = async (signal) => {
-    if (logger?.info) {
-      logger.info(`Received ${signal}. Shutting down HTTP service.`);
-    }
-    await new Promise((resolve) => server.close(resolve));
-    await roomRegistry.waitForPersistence();
-    await redisManager.disconnect();
-    process.exit(0);
-  };
-
-  ['SIGINT', 'SIGTERM'].forEach((signal) => {
-    process.once(signal, () => shutdown(signal));
-  });
+  createGracefulShutdown(server, {
+    roomRegistry,
+    redisManager,
+    logger,
+    serviceName: 'HTTP service',
+  }).register();
 
   server.listen(config.httpPort, () => {
     if (logger?.info) {
