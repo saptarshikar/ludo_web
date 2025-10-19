@@ -77,10 +77,9 @@ class GameResultQueue extends EventEmitter {
       } else {
         const delay = job.backoffStrategy(job.attemptsMade, job.backoffDelay);
         this.emit('retrying', job, error, delay);
-        this.processing = false;
-        this.schedule();
         setTimeout(() => {
           this.jobs.unshift(job);
+          this.processing = false;
           this.schedule();
         }, delay);
         return;

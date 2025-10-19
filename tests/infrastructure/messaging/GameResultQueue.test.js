@@ -1,7 +1,7 @@
 const { GameResultQueue } = require('../../../src/infrastructure/messaging/GameResultQueue');
 
 describe('GameResultQueue', () => {
-  test('retries failed jobs without blocking subsequent work', async () => {
+  test('pauses processing until retried job completes', async () => {
     const queue = new GameResultQueue({ backoffDelay: 5 });
     const processedOrder = [];
     let firstAttempt = true;
@@ -22,10 +22,10 @@ describe('GameResultQueue', () => {
     await flushImmediate();
     await flushImmediate();
 
-    expect(processedOrder).toEqual(['first', 'second']);
+    expect(processedOrder).toEqual(['first']);
 
     await new Promise((resolve) => setTimeout(resolve, 10));
 
-    expect(processedOrder).toEqual(['first', 'second', 'first']);
+    expect(processedOrder).toEqual(['first', 'first', 'second']);
   });
 });
