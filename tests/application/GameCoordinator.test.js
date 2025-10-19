@@ -4,6 +4,7 @@ const { RoomRegistry } = require('../../src/infrastructure/rooms/RoomRegistry');
 describe('GameCoordinator', () => {
   let roomRegistry;
   let profileRepository;
+  let resultPublisher;
   let coordinator;
 
   afterEach(() => {
@@ -15,7 +16,10 @@ describe('GameCoordinator', () => {
     profileRepository = {
       recordGameResult: jest.fn().mockResolvedValue({}),
     };
-    coordinator = new GameCoordinator({ roomRegistry, profileRepository });
+    resultPublisher = {
+      publishGameResult: jest.fn().mockResolvedValue({}),
+    };
+    coordinator = new GameCoordinator({ roomRegistry, profileRepository, resultPublisher });
   });
 
   test('joinPlayer adds human player and sets guest flag', async () => {
@@ -73,7 +77,7 @@ describe('GameCoordinator', () => {
     expect(room.game.pendingResults).not.toBeNull();
 
     await coordinator.persistPendingResults(room);
-    expect(profileRepository.recordGameResult).toHaveBeenCalledTimes(0); // guests -> no persistence
+    expect(resultPublisher.publishGameResult).toHaveBeenCalledTimes(1);
   });
 
   test('runAiTurns rolls for AI with no available moves and returns turn to human', async () => {

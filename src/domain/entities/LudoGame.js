@@ -1,3 +1,4 @@
+const { randomUUID } = require('crypto');
 const {
   SAFE_TRACK_POSITIONS,
   PLAYER_CONFIGS,
@@ -385,6 +386,8 @@ class LudoGame {
           playerId: player.id,
           profileId: player.profileId,
         })),
+        turnId: randomUUID(),
+        completedAt: Date.now(),
       };
     } else if (!extraTurn) {
       this.advanceTurn(false);
