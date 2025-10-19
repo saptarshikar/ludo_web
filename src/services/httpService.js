@@ -1,29 +1,61 @@
 const http = require('http');
 const { createApplicationContext } = require('../bootstrap/createApplicationContext');
 const { createHttpApp } = require('../interfaces/http/createHttpApp');
+const { loadEnvironmentConfig } = require('../bootstrap/loadEnvironmentConfig');
+const { createRedisManager } = require('../bootstrap/createRedisManager');
+const { createGracefulShutdown } = require('../bootstrap/createGracefulShutdown');
 
-const HTTP_PORT = Number.parseInt(process.env.HTTP_PORT || process.env.PORT || '3000', 10);
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || null;
-const SOCKET_URL = process.env.SOCKET_URL || null;
+const config = loadEnvironmentConfig(process.env);
+const logger = console;
 
 async function startHttpService() {
-  const { profileRepository, sessionStore } = createApplicationContext();
+  const redisManager = createRedisManager(config.redis, { logger });
+  if (redisManager.enabled) {
+    await redisManager.connect().catch(() => {});
+  }
+
+  const { profileRepository, sessionStore, roomRegistry } = createApplicationContext({
+    redis: redisManager.client
+      ? {
+          client: redisManager.client,
+          logger: (error) => {
+            if (logger?.error) {
+              logger.error('Redis room store error', error);
+            }
+          },
+        }
+      : undefined,
+  });
+
   const app = createHttpApp({
-    googleClientId: GOOGLE_CLIENT_ID,
-    socketUrl: SOCKET_URL,
+    googleClientId: config.googleClientId,
+    socketUrl: config.socketUrl,
     profileRepository,
     sessionStore,
+    diagnostics: {
+      redis: () => redisManager.getHealth(),
+    },
   });
 
   const server = http.createServer(app);
-  server.listen(HTTP_PORT, () => {
-    // eslint-disable-next-line no-console
-    console.log(`HTTP service listening on http://localhost:${HTTP_PORT}`);
+
+  createGracefulShutdown(server, {
+    roomRegistry,
+    redisManager,
+    logger,
+    serviceName: 'HTTP service',
+  }).register();
+
+  server.listen(config.httpPort, () => {
+    if (logger?.info) {
+      logger.info(`HTTP service listening on http://localhost:${config.httpPort}`);
+    }
   });
 }
 
 startHttpService().catch((error) => {
-  // eslint-disable-next-line no-console
-  console.error('Fatal error starting HTTP service', error);
+  if (logger?.error) {
+    logger.error('Fatal error starting HTTP service', error);
+  }
   process.exit(1);
 });

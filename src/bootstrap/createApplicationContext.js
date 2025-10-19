@@ -7,6 +7,12 @@ const { GameCoordinator } = require('../application/services/GameCoordinator');
 
 /**
  * Constructs application-level dependencies shared across services.
+ * @param {{
+ *   redis?: {
+ *     client?: import('redis').RedisClientType,
+ *     logger?: (error: Error) => void,
+ *   },
+ * }} [options]
  * @returns {{
  *   profileRepository: MySqlProfileRepository,
  *   sessionStore: InMemorySessionStore,
@@ -14,10 +20,11 @@ const { GameCoordinator } = require('../application/services/GameCoordinator');
  *   coordinator: GameCoordinator,
  * }}
  */
-function createApplicationContext() {
+function createApplicationContext(options = {}) {
+  const { redis } = options;
   const profileRepository = new MySqlProfileRepository();
   const sessionStore = new InMemorySessionStore();
-  const roomRegistry = new RoomRegistry({ storageAdapter: createRoomStore() });
+  const roomRegistry = new RoomRegistry({ storageAdapter: createRoomStore(redis) });
   const coordinator = new GameCoordinator({ roomRegistry, profileRepository });
 
   return {
@@ -28,38 +35,22 @@ function createApplicationContext() {
   };
 }
 
-function createRoomStore() {
-  const env = process.env || {};
-  if (env.NODE_ENV === 'test') {
+function createRoomStore(redisOptions) {
+  if (!redisOptions || !redisOptions.client) {
     return new InMemoryRoomStore();
   }
 
-  const redisUrl = env.REDIS_URL;
-  if (redisUrl) {
-    let createClient;
-    try {
-      ({ createClient } = require('redis'));
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('Redis URL provided but redis client dependency is missing', error);
-      return new InMemoryRoomStore();
-    }
-
-    const redisClient = createClient({ url: redisUrl });
-    redisClient.on('error', (error) => {
-      // eslint-disable-next-line no-console
-      console.error('Redis connection error', error);
-    });
-    redisClient.connect().catch((error) => {
-      if (env.NODE_ENV !== 'test') {
-        // eslint-disable-next-line no-console
-        console.error('Failed to connect to Redis', error);
-      }
-    });
-    return new RedisRoomStore(redisClient);
-  }
-
-  return new InMemoryRoomStore();
+  return new RedisRoomStore(redisOptions.client, {
+    logger:
+      typeof redisOptions.logger === 'function'
+        ? redisOptions.logger
+        : (error) => {
+            if (error) {
+              // eslint-disable-next-line no-console
+              console.error('RedisRoomStore persistence failed', error);
+            }
+          },
+  });
 }
 
 module.exports = {
