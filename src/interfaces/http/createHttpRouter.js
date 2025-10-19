@@ -40,9 +40,21 @@ function createHttpRouter({
   const router = express.Router();
   const oauthClient = googleClientId ? new OAuth2Client(googleClientId) : null;
 
+  function sanitizeRedisHealth(rawHealth) {
+    if (!rawHealth || typeof rawHealth !== 'object') {
+      return { ok: true, status: 'disabled' };
+    }
+    return {
+      ok: rawHealth.ok !== false,
+      status: rawHealth.status || (rawHealth.ok === false ? 'unavailable' : 'unknown'),
+    };
+  }
+
   router.get('/health', (req, res) => {
-    const redisHealth = typeof diagnostics.redis === 'function' ? diagnostics.redis() : { ok: true, status: 'disabled' };
-    const ok = redisHealth && redisHealth.ok !== false;
+    const rawRedisHealth =
+      typeof diagnostics.redis === 'function' ? diagnostics.redis() : { ok: true, status: 'disabled' };
+    const redisHealth = sanitizeRedisHealth(rawRedisHealth);
+    const ok = redisHealth.ok !== false;
     res.status(ok ? 200 : 503).json({ ok, uptime: process.uptime(), redis: redisHealth });
   });
 

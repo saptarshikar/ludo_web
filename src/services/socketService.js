@@ -30,10 +30,20 @@ async function startSocketService() {
   const server = http.createServer((req, res) => {
     if (req.url === '/health') {
       const redisHealth = redisManager.getHealth();
-      const ok = redisHealth && redisHealth.ok !== false;
+      const { ok: redisOk, status: redisStatus } = redisHealth || {};
+      const ok = redisOk !== false;
       const status = ok ? 200 : 503;
       res.writeHead(status, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ ok, uptime: process.uptime(), redis: redisHealth }));
+      res.end(
+        JSON.stringify({
+          ok,
+          uptime: process.uptime(),
+          redis: {
+            ok,
+            status: redisStatus || (redisManager.enabled ? 'unknown' : 'disabled'),
+          },
+        }),
+      );
       return;
     }
     res.writeHead(404);
