@@ -20,6 +20,9 @@ const { OAuth2Client } = require('google-auth-library');
  *   getSession: (token: string) => { profileId: string } | null,
  *   revokeSession: (token: string) => void,
  * }} sessionStore
+ * @property {{
+ *   redis?: () => { ok?: boolean; status?: string; error?: string | null },
+ * }} [diagnostics]
  */
 
 /**
@@ -27,12 +30,20 @@ const { OAuth2Client } = require('google-auth-library');
  * @param {HttpRouteDependencies} dependencies
  * @returns {import('express').Router}
  */
-function createHttpRouter({ googleClientId, socketUrl = null, profileRepository, sessionStore }) {
+function createHttpRouter({
+  googleClientId,
+  socketUrl = null,
+  profileRepository,
+  sessionStore,
+  diagnostics = {},
+}) {
   const router = express.Router();
   const oauthClient = googleClientId ? new OAuth2Client(googleClientId) : null;
 
   router.get('/health', (req, res) => {
-    res.json({ ok: true, uptime: process.uptime() });
+    const redisHealth = typeof diagnostics.redis === 'function' ? diagnostics.redis() : { ok: true, status: 'disabled' };
+    const ok = redisHealth && redisHealth.ok !== false;
+    res.status(ok ? 200 : 503).json({ ok, uptime: process.uptime(), redis: redisHealth });
   });
 
   router.get('/config', (req, res) => {
