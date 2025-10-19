@@ -1,75 +1,43 @@
-const { LudoGame } = require('../../domain/entities/LudoGame');
+const { InMemoryRoomStore } = require('./InMemoryRoomStore');
 
 class RoomRegistry {
-  constructor(gameFactory = (roomId) => new LudoGame(roomId)) {
-    this.rooms = new Map();
-    this.socketToRoom = new Map();
-    this.gameFactory = gameFactory;
+  constructor({ storageAdapter } = {}) {
+    this.storageAdapter = storageAdapter || new InMemoryRoomStore();
   }
 
   getOrCreate(roomId) {
-    const trimmedId = roomId.trim().toLowerCase();
-    if (!this.rooms.has(trimmedId)) {
-      this.rooms.set(trimmedId, {
-        id: trimmedId,
-        game: this.gameFactory(trimmedId),
-        createdAt: Date.now(),
-      });
-    }
-    return this.rooms.get(trimmedId);
+    return this.storageAdapter.getOrCreate(roomId);
   }
 
   setSocketRoom(socketId, roomId) {
-    this.socketToRoom.set(socketId, roomId?.trim().toLowerCase());
+    return this.storageAdapter.setSocketRoom(socketId, roomId);
   }
 
   getRoomBySocket(socketId) {
-    const roomId = this.socketToRoom.get(socketId);
-    if (!roomId) {
-      return null;
-    }
-    return this.rooms.get(roomId) || null;
+    return this.storageAdapter.getRoomBySocket(socketId);
   }
 
   removeSocket(socketId) {
-    const roomId = this.socketToRoom.get(socketId);
-    if (!roomId) {
-      return null;
-    }
-    this.socketToRoom.delete(socketId);
-    const room = this.rooms.get(roomId);
-    if (!room) {
-      return null;
-    }
-    const removedPlayer = room.game.removePlayer(socketId);
-    if (room.game.players.length === 0) {
-      this.rooms.delete(roomId);
-    }
-    return { roomId, removedPlayer };
+    return this.storageAdapter.removeSocket(socketId);
   }
 
   removeRoom(roomId) {
-    if (!roomId) {
-      return;
-    }
-    this.rooms.delete(roomId.trim().toLowerCase());
+    return this.storageAdapter.removeRoom(roomId);
   }
 
   getRoom(roomId) {
-    if (!roomId) {
-      return null;
-    }
-    const normalisedId = roomId.trim().toLowerCase();
-    return this.rooms.get(normalisedId) || null;
+    return this.storageAdapter.getRoom(roomId);
   }
 
   listActiveRooms() {
-    return Array.from(this.rooms.values()).map((room) => ({
-      id: room.id,
-      players: room.game.players.length,
-      phase: room.game.phase,
-      createdAt: room.createdAt,
-    }));
+    return this.storageAdapter.listActiveRooms();
+  }
+
+  waitForPersistence() {
+    if (typeof this.storageAdapter.waitForPersistence === 'function') {
+      return this.storageAdapter.waitForPersistence();
+    }
+    return Promise.resolve();
   }
 }
 
